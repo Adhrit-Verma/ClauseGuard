@@ -32,3 +32,21 @@ def test_verdict_rule():
 def test_summarize_handles_no_clauses_or_findings(monkeypatch):
     monkeypatch.setattr(summarizer, "call_llm", lambda system, user: '{"summary": "No clauses found.", "key_points": []}')
     assert summarizer.summarize([], []).verdict.value == "low_risk"
+
+
+def test_prompt_lists_each_rule_once_with_a_count(monkeypatch, sample_clauses):
+    seen = {}
+
+    def fake(system, user):
+        seen["prompt"] = user
+        return '{"summary": "s", "key_points": []}'
+
+    monkeypatch.setattr(summarizer, "call_llm", fake)
+    other = RiskFinding(clause_id="c2", rule_id="cap", rule_name="Cap too low", severity="high", explanation="tiny cap")
+
+    summarizer.summarize(sample_clauses, [_finding("medium"), _finding("medium"), other])
+
+    assert seen["prompt"].split("Risk findings:\n")[1].splitlines() == [
+        "- high: Cap too low -- tiny cap",
+        "- medium: Rule (x2) -- x",
+    ]

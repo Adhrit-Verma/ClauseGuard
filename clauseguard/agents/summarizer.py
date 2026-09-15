@@ -26,8 +26,17 @@ def verdict_for(findings: list[RiskFinding]) -> RiskVerdict:
 
 def summarize(clauses: list[Clause], findings: list[RiskFinding]) -> ExecutiveSummary:
     clause_types = ", ".join(sorted({clause.type.value for clause in clauses})) or "none"
-    ordered = sorted(findings, key=lambda f: _SEVERITY_ORDER[f.severity])
-    findings_block = "\n".join(f"- {f.severity.value}: {f.rule_name} -- {f.explanation}" for f in ordered)
+    # One line per rule, not per finding: a long contract can produce hundreds of findings, and this
+    # prompt isn't split like the other agents' input, so it has to stay small.
+    by_rule: dict[str, list[RiskFinding]] = {}
+    for finding in sorted(findings, key=lambda f: _SEVERITY_ORDER[f.severity]):
+        by_rule.setdefault(finding.rule_id, []).append(finding)
+    findings_block = "\n".join(
+        f"- {group[0].severity.value}: {group[0].rule_name}"
+        + (f" (x{len(group)})" if len(group) > 1 else "")
+        + f" -- {group[0].explanation}"
+        for group in by_rule.values()
+    )
     user_prompt = f"Clause types found: {clause_types}\n\nRisk findings:\n{findings_block or '(no risk findings)'}"
 
     draft = SummaryDraft.model_validate(parse_json_response(call_llm(SYSTEM_PROMPT, user_prompt)))

@@ -1,0 +1,19 @@
+OFFER OF EMPLOYMENT (synthetic sample for testing)
+
+1. Position and Compensation. You are offered the position of Software Engineer at Acme Technologies Pvt. Ltd. with an annual gross salary of INR 12,00,000, payable monthly. The Company may revise your role, reporting line, work location, or compensation at its sole discretion at any time.
+
+2. Probation. You will be on probation for six (6) months from your joining date. The Company may extend the probation period at its discretion, and during probation your employment may be terminated without notice.
+
+3. Notice Period. After confirmation, you must give ninety (90) days written notice to resign. The Company may end your employment with seven (7) days notice or pay in lieu of notice.
+
+4. Training Bond. If you leave the Company within twenty-four (24) months of joining, you shall repay all training costs incurred by the Company, subject to a minimum of INR 2,00,000, as liquidated damages.
+
+5. Non-Compete. For twenty-four (24) months after leaving the Company, you shall not work for, consult for, or start any business that competes with the Company anywhere in the world.
+
+6. Intellectual Property. All inventions, software, and works you create during your employment, whether or not during working hours or using Company resources, shall be the exclusive property of the Company.
+
+7. Confidentiality. You shall keep all confidential information of the Company secret in perpetuity, including after your employment ends.
+
+8. Leave. You are entitled to eighteen (18) days of paid leave per calendar year.
+
+9. Governing Law. This letter is governed by the laws of India, and the courts of Bengaluru shall have exclusive jurisdiction.

@@ -10,7 +10,11 @@ pytest, every LLM call mocked via `monkeypatch.setattr(<agent module>,
   onto a skipped numbered heading, dropping bad rows), mapping numbered
   checklist answers back to clause/rule pairs with severity from the rule
   set, and computing the verdict regardless of what the model claims.
+  Long-document splitting (extractor line chunks, analyzer check batches)
+  is tested by shrinking `prompt_budget` / `MAX_CHECKS_PER_CALL`.
 - `test_rules_loader.py` -- default rule set loads and validates.
+- `test_retrieval.py` -- tokenizer and BM25 scoring (no overlap scores 0,
+  rarer shared terms score higher).
 - `test_llm.py` -- the markdown-fence-stripping JSON parser, and the
   context-overflow guard (refuses a too-long prompt before calling Ollama).
 - `test_db.py` -- the review status lifecycle (extracting -> ... -> done

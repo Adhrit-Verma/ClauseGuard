@@ -78,6 +78,7 @@ clauseguard/
   storage/      SQLite audit history
   static/       the web UI (one HTML file, vanilla JS, no build step)
   llm.py        LLM wrapper -- Ollama or Anthropic, one seam tests mock
+  retrieval.py  BM25 keyword index matching rules to candidate clauses
   main.py       FastAPI app (web UI, POST /review, GET /reviews)
 tests/          pytest, offline
 sample_docs/    a synthetic NDA (.txt and .pdf) for local testing

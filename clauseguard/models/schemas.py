@@ -5,7 +5,7 @@ instead of silently corrupting a downstream agent."""
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 
 class ClauseType(str, Enum):
@@ -16,6 +16,11 @@ class ClauseType(str, Enum):
     INDEMNITY = "indemnity"
     AUTO_RENEWAL = "auto_renewal"
     GOVERNING_LAW = "governing_law"
+    COMPENSATION = "compensation"
+    NOTICE_PERIOD = "notice_period"
+    NON_COMPETE = "non_compete"
+    IP_ASSIGNMENT = "ip_assignment"
+    PROBATION = "probation"
     OTHER = "other"
 
 
@@ -49,6 +54,7 @@ class Rule(BaseModel):
     applies_to: ClauseType
     description: str
     severity: Severity
+    keywords: list[str] = Field(default_factory=list)  # what the BM25 index matches clauses on
 
 
 class RiskFinding(BaseModel):
@@ -83,24 +89,38 @@ class _Row(BaseModel):
         return value
 
 
+def parse_rows(reply: dict, key: str, model: type[BaseModel]) -> list:
+    """Validates the model's `key` rows one at a time and drops the ones that don't fit, so a single
+    malformed row can't fail a whole review. A reply without that list at all is still malformed."""
+    rows = reply.get(key) if isinstance(reply, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError(f"model reply has no {key!r} list")
+    kept = []
+    for row in rows:
+        try:
+            kept.append(model.model_validate(row))
+        except ValidationError:
+            continue
+    return kept
+
+
 class ClauseSpan(_Row):
     type: ClauseType
     start: int = Field(ge=1)
     confidence: float = Field(ge=0, le=1, default=1.0)
 
-
-class ClauseSpans(BaseModel):
-    clauses: list[ClauseSpan]
+    @field_validator("type", mode="before")
+    @classmethod
+    def _unknown_type_is_other(cls, value):
+        # The model sometimes invents labels ("limitation_of_liability"). Keep the clause and its boundary;
+        # retrieval matches rules to it by content anyway.
+        return value if value in {t.value for t in ClauseType} else ClauseType.OTHER.value
 
 
 class RiskCheck(_Row):
     index: int = Field(ge=1)
     violates: bool
     reason: str = ""
-
-
-class RiskChecks(BaseModel):
-    checks: list[RiskCheck]
 
 
 class SummaryDraft(BaseModel):

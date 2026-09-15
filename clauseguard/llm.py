@@ -61,7 +61,9 @@ def _ollama_generate(payload: dict) -> dict:
     body = {
         "model": MODEL,
         "keep_alive": OLLAMA_KEEP_ALIVE,
-        "options": {"num_ctx": OLLAMA_NUM_CTX, "temperature": 0},
+        # num_predict caps a reply at the room prompt_budget() reserves for it: real replies stay well under,
+        # and a model stuck repeating itself fails fast as malformed JSON instead of running to the timeout.
+        "options": {"num_ctx": OLLAMA_NUM_CTX, "temperature": 0, "num_predict": _REPLY_TOKENS},
         **payload,
     }
     request = urllib.request.Request(
@@ -73,12 +75,23 @@ def _ollama_generate(payload: dict) -> dict:
         return json.loads(response.read())
 
 
+_REPLY_TOKENS = 1024
+
+
+def prompt_budget(system: str) -> int:
+    """Characters of user prompt that fit in one call next to `system`, leaving room for the reply.
+    Agents split long documents to stay under it."""
+    # ponytail: ~3.5 chars/token estimate, not a real tokenizer.
+    context_tokens = OLLAMA_NUM_CTX if PROVIDER == "ollama" else 150_000
+    return int((context_tokens - _REPLY_TOKENS) * 3.5) - len(system)
+
+
 def _call_ollama(system: str, user: str) -> str:
-    # ponytail: ~3.5 chars/token estimate, not a real tokenizer. Ollama silently truncates prompts that
-    # overflow num_ctx (dropping clauses), so refuse loudly instead, keeping 1024 tokens for the reply.
-    if (len(system) + len(user)) / 3.5 + 1024 > OLLAMA_NUM_CTX:
+    # Safety net: agents split input to prompt_budget, but Ollama would silently truncate (and drop
+    # clauses from) anything that still overflows num_ctx, so refuse loudly instead.
+    if len(user) > prompt_budget(system):
         raise RuntimeError(
-            f"This document is too long for the model's context window (OLLAMA_NUM_CTX={OLLAMA_NUM_CTX}). "
+            f"Part of this document is too long for one model call (OLLAMA_NUM_CTX={OLLAMA_NUM_CTX}). "
             "Raise OLLAMA_NUM_CTX in .env -- it uses more VRAM and can be slower."
         )
     return _ollama_generate({"system": system, "prompt": user, "stream": False, "format": "json"})["response"]

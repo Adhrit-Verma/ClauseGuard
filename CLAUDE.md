@@ -17,13 +17,14 @@ clauseguard/          the package -- see clauseguard/CLAUDE.md
   rules/                 the configurable rule set the Risk Analyzer checks against
   storage/                SQLite audit history
   llm.py                   LLM wrapper, Ollama or Anthropic (the one place tests mock)
+  retrieval.py              BM25 keyword index: finds candidate clauses per rule
   main.py                   FastAPI app: POST /review returns immediately (202),
                               the pipeline runs as a background task, progress is
                               polled via GET /reviews/{id} -- see FLOW.md
   static/index.html          the web UI -- one file, vanilla JS, no build step,
                               resumes an in-progress review after a page refresh
 tests/                 pytest, all LLM calls mocked -- no API key needed to run these
-sample_docs/           one synthetic NDA for local testing
+sample_docs/           synthetic NDA and offer letter for local testing
 scripts/start.py       one-command launch: checks/starts Ollama, pulls the
                          model if missing, starts the server, opens the browser
 scripts/demo.py        runs the pipeline standalone, no server, real LLM calls

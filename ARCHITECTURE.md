@@ -110,6 +110,9 @@ SLA, or an HR policy without touching agent code.
   engine inside each agent. One thin wrapper function, `call_llm`, is the
   only place either SDK/API is touched -- this is also the seam every
   test mocks.
+- **BM25 keyword index** (`clauseguard/retrieval.py`, plain Python) --
+  retrieves candidate clauses for each rule; the LLM checklist then verifies
+  (reranks) only those. No embedding or reranker model to download.
 - **pdfplumber** -- PDF text extraction.
 - **Pydantic** -- schema validation at every agent hand-off.
 - **SQLite** (`clauseguard/storage/db.py`) -- audit history, one table,
@@ -137,6 +140,18 @@ SLA, or an HR policy without touching agent code.
   model must answer row by row, which caught 5-7 in the same single call.
   Results still vary between identical runs, so a missed finding on one run
   is not proof the clause is clean.
+- **Extractor mislabels clause types.** On an offer letter the model put 13
+  of 18 clauses under "termination", so type-gated rules never reached them.
+  The Risk Analyzer now also retrieves each rule's top clauses from a BM25
+  keyword index, so a wrong label no longer hides a clause. Still missed: a
+  clause that is mislabeled *and* shares no keywords with the rule.
+- **Model gets stuck generating.** Asked to extract a 185-line document in
+  one call, qwen2.5:7b produced ~4,170 output tokens for ~56 clauses and
+  hit the 5-minute timeout. Two guards: extraction calls are capped at
+  `_MAX_LINES_PER_CALL` lines, and every Ollama reply is capped at 1024
+  tokens (`num_predict`, the same room `prompt_budget()` reserves), so a
+  runaway reply fails in under a minute as malformed output instead of
+  hanging the review.
 - **Malformed JSON from the LLM.** Handled today: `parse_json_response`
   strips markdown fences, and Pydantic validation raises loudly rather
   than passing a partial object downstream. Not handled today: automatic
@@ -159,8 +174,10 @@ SLA, or an HR policy without touching agent code.
   visible to another anyway.
 - **Document longer than the model's context window.** Ollama silently
   truncates an over-long prompt, which would drop clauses with no error.
-  `llm.py` estimates the prompt size first (~3.5 chars/token) and fails
-  the review with a "raise `OLLAMA_NUM_CTX`" message instead. It's an
-  estimate, not a tokenizer, so a document right at the limit can be
-  wrongly rejected or slip through; the real fix for long contracts is
-  splitting the document into sections (not built).
+  `llm.prompt_budget()` estimates how much fits in one call (~3.5
+  chars/token), and both the Extractor (line chunks) and Risk Analyzer
+  (check batches) split their input to stay under it, so a long contract
+  just costs more calls. If a single piece still overflows -- one giant
+  clause -- `llm.py` refuses the call with a "raise `OLLAMA_NUM_CTX`"
+  message rather than letting Ollama truncate. Known seam: a chunk that
+  begins mid-clause can occasionally be split into a false extra clause.

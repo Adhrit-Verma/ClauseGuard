@@ -20,21 +20,35 @@ seconds but lost findings was rejected (see git history).
   start back one line when the line above is an unclaimed numbered heading
   (the model consistently lands one line past headings like
   "4. Indemnification."). Trailing non-clause text is absorbed into the
-  last clause.
+  last clause. Documents too long for one call are split into line chunks
+  that fit both `llm.prompt_budget()` and `_MAX_LINES_PER_CALL` (a few lines
+  repeated across each cut). The line cap applies even when the context
+  would fit more: on long calls the model pairs clause types with the wrong
+  line numbers. Starts
+  keep their global line numbers, so a clause can run across a cut, and a
+  start number outside the chunk it came from is ignored.
 - `risk_analyzer.py` -- `analyze_risk(clauses, rules) -> RiskAnalysisResult`.
-  Code builds every (clause, rule-for-that-clause's-type) pair and sends
-  them as a numbered checklist; the model must answer each row
+  **Retrieve:** candidates for each rule are the clauses labeled with its
+  type plus the `TOP_K_PER_RULE` clauses a BM25 keyword index
+  (`clauseguard/retrieval.py`) ranks highest for the rule's `keywords`, so a
+  mislabeled clause is still checked. **Rerank/verify:** those (clause, rule)
+  pairs go out as a numbered checklist; the model must answer each row
   `[check_number, true/false, <=12-word reason]`. Skips the LLM call
   entirely if there are no pairs -- see the conditional routing note
   below. An open-ended "list the violations" prompt caught 1-2 of ~6 real
   violations; the checklist caught 5-7 in the same single call. `rule_name`
   and `severity` come from the rule set, never the model; unknown check
-  numbers are ignored and duplicates keep the first answer.
+  numbers are ignored and duplicates keep the first answer. Checks go out in
+  batches that fit `llm.prompt_budget()` and hold at most
+  `MAX_CHECKS_PER_CALL` (40, so the reply fits too), each numbered from 1.
 - `summarizer.py` -- `summarize(clauses, findings) -> ExecutiveSummary`.
   Always runs, even with zero clauses/findings. The model writes only
   `summary` + up to 4 `key_points`; `verdict` comes from `verdict_for()`
   (any high/critical or 3+ medium -> high_risk, any medium -> moderate,
-  else low) because a small model was seen misjudging it.
+  else low) because a small model was seen misjudging it. Findings reach
+  the prompt as one line per rule with a count (`Liability cap too low (x6)`),
+  so the prompt stays small however long the contract is -- this agent's
+  input isn't split like the other two.
 - `graph.py` -- LangGraph `StateGraph` wiring: `extract -> [analyze?] ->
   summarize -> END`. `ReviewState` is the shared TypedDict all three nodes
   read/write. `run_review(document_text, on_stage=None)` is the single

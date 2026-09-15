@@ -28,9 +28,16 @@
   switched by `CLAUSEGUARD_LLM_PROVIDER` (`anthropic` or `ollama`, see the
   module docstring for defaults). Exposes `call_llm(system, user) -> str`
   and `parse_json_response(text) -> dict` (strips markdown code fences
-  before `json.loads`). Every agent imports `call_llm` from here and every
+  before `json.loads`), plus `prompt_budget(system)` -- how many prompt
+  characters fit one call. Agents split long documents to it; `_call_ollama`
+  refuses anything still over it, since Ollama would silently truncate. Every agent imports `call_llm` from here and every
   agent test monkeypatches it there -- agent code never knows which
   provider is active.
+
+- `retrieval.py` -- the keyword index: `tokenize(text)` and
+  `bm25_scores(query, documents)`, plain Python. Built per document over its
+  clauses (nothing persisted); the Risk Analyzer uses it to find candidate
+  clauses for each rule independent of the Extractor's type labels.
 
 Subpackages: [models/](models/CLAUDE.md), [agents/](agents/CLAUDE.md),
 [rules/](rules/CLAUDE.md), [storage/](storage/CLAUDE.md).

@@ -6,11 +6,15 @@ pipeline raises right there instead of passing a malformed object to the
 next agent.
 
 - `Clause` / `ExtractionResult` -- Extractor's output. `ClauseType` enum
-  caps what a clause can be labeled (termination, liability, payment_terms,
-  confidentiality, indemnity, auto_renewal, governing_law, other).
+  caps what a clause can be labeled: commercial types (termination,
+  liability, payment_terms, confidentiality, indemnity, auto_renewal,
+  governing_law), employment types (compensation, notice_period,
+  non_compete, ip_assignment, probation), and other. The Extractor's prompt
+  lists them straight from the enum.
 - `Rule` -- one entry from the configurable rule set (see
-  [rules/](../rules/CLAUDE.md)). `applies_to` is a `ClauseType`, so the
-  Risk Analyzer only checks each clause against rules for its own type.
+  [rules/](../rules/CLAUDE.md)). `applies_to` is a `ClauseType` hint and
+  `keywords` feed the BM25 retrieval step; the Risk Analyzer checks a rule
+  against clauses matching either.
 - `RiskFinding` / `RiskAnalysisResult` -- Risk Analyzer's output. Links a
   finding back to both the clause (`clause_id`) and the rule it violated.
 - `ExecutiveSummary` -- Summarizer's output. `RiskVerdict` is the top-line
@@ -25,7 +29,7 @@ next agent.
 - `ReviewRecord` -- what `POST /review` (immediately) and `GET
   /reviews/{id}` (on every poll) return: `id`, `status`, and either
   `report` (once done) or `error` (once failed) -- never both.
-- `ClauseSpan(s)`, `RiskCheck(s)`, `SummaryDraft` -- the *raw* LLM outputs,
+- `ClauseSpan`, `RiskCheck`, `SummaryDraft` -- the *raw* LLM outputs,
   deliberately smaller than the models above. Each agent validates the
   model's JSON against one of these, then builds the full `Clause` /
   `RiskFinding` / `ExecutiveSummary` by adding what code already knows
@@ -34,7 +38,10 @@ next agent.
   compact JSON row in field order (`["liability", 5, 0.9]`,
   `[1, true, "reason"]`) -- that's what the prompts ask for. Field order is
   therefore part of the contract: don't reorder those fields without
-  updating the prompts.
+  updating the prompts. Agents read row lists through `parse_rows()`, which
+  validates each row on its own and drops ones that don't fit (an invented
+  clause type becomes `other` instead), so one bad row can't fail a review;
+  a reply missing the list entirely is still malformed.
 
 Adding a new clause type or a new finding field means editing this file
 first -- everything downstream (rules JSON, prompts, DB storage) follows

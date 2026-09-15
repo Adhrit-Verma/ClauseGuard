@@ -4,48 +4,103 @@
     "name": "Liability cap too low or absent",
     "applies_to": "liability",
     "description": "Flag any liability cap set below a reasonable amount (e.g. under 12 months of fees, or under $50,000), or any clause that disclaims liability entirely for gross negligence or willful misconduct.",
-    "severity": "high"
+    "severity": "high",
+    "keywords": ["liability", "liable", "cap", "capped", "limitation", "damages", "aggregate"]
   },
   {
     "id": "auto_renewal_no_optout",
     "name": "Auto-renewal without adequate opt-out notice",
     "applies_to": "auto_renewal",
     "description": "Flag auto-renewal clauses that do not give at least 30 days advance notice before renewal, or that make opting out difficult.",
-    "severity": "medium"
+    "severity": "medium",
+    "keywords": ["renew", "renewal", "automatically", "successive", "expiry", "expiration"]
   },
   {
     "id": "unlimited_one_sided_indemnity",
     "name": "Unlimited or one-sided indemnification",
     "applies_to": "indemnity",
     "description": "Flag indemnification clauses that are one-sided (only one party indemnifies) or that impose uncapped/unlimited indemnity obligations.",
-    "severity": "high"
+    "severity": "high",
+    "keywords": ["indemnify", "indemnification", "indemnity", "harmless", "defend"]
   },
   {
     "id": "no_termination_for_convenience",
     "name": "No termination-for-convenience option",
     "applies_to": "termination",
     "description": "Flag termination clauses that lack a for-convenience exit with reasonable notice (e.g. 30-60 days), locking a party into the full term.",
-    "severity": "low"
+    "severity": "low",
+    "keywords": ["terminate", "terminated", "termination", "convenience", "breach", "uncured"]
   },
   {
     "id": "unfavorable_payment_terms",
     "name": "Unfavorable payment terms",
     "applies_to": "payment_terms",
     "description": "Flag payment terms requiring payment in fewer than 30 days, or that impose late fees/interest above roughly 1.5% per month.",
-    "severity": "medium"
+    "severity": "medium",
+    "keywords": ["payment", "invoice", "fee", "late", "interest", "overdue"]
   },
   {
     "id": "perpetual_or_overbroad_confidentiality",
     "name": "Perpetual or overly broad confidentiality",
     "applies_to": "confidentiality",
     "description": "Flag confidentiality obligations with no expiration date, or that are broad enough to cover information that is already public.",
-    "severity": "medium"
+    "severity": "medium",
+    "keywords": ["confidential", "confidentiality", "disclose", "disclosure", "proprietary", "perpetuity", "secret"]
   },
   {
     "id": "unfavorable_governing_law",
     "name": "Unfavorable governing law or venue",
     "applies_to": "governing_law",
     "description": "Flag governing law or venue clauses that place disputes in a jurisdiction that is inconvenient or unfavorable to the reviewing party.",
-    "severity": "low"
+    "severity": "low",
+    "keywords": ["governing", "governed", "jurisdiction", "venue", "court", "arbitration", "dispute"]
+  },
+  {
+    "id": "overbroad_non_compete",
+    "name": "Overbroad non-compete or non-solicitation",
+    "applies_to": "non_compete",
+    "description": "Flag non-compete or non-solicitation restrictions that last more than 12 months after employment ends, cover an unreasonably wide geography or industry, or pay nothing for the restricted period.",
+    "severity": "high",
+    "keywords": ["compete", "competes", "competitor", "competing", "competition", "solicit", "solicitation", "restrictive", "covenant"]
+  },
+  {
+    "id": "one_sided_notice_period",
+    "name": "One-sided or excessive notice period",
+    "applies_to": "notice_period",
+    "description": "Flag notice periods that are longer for the employee than for the employer, exceed 90 days for the employee, or let the employer end employment without notice while the employee cannot.",
+    "severity": "medium",
+    "keywords": ["notice", "resign", "resignation", "relieve", "relieving", "lieu", "separation"]
+  },
+  {
+    "id": "bond_or_clawback",
+    "name": "Training bond or salary clawback",
+    "applies_to": "compensation",
+    "description": "Flag training bonds, minimum-service commitments, or clauses making the employee repay salary, bonuses, relocation, or training costs for leaving before a set period.",
+    "severity": "high",
+    "keywords": ["bond", "repay", "repayment", "refund", "reimburse", "recover", "recovery", "clawback", "training", "liquidated"]
+  },
+  {
+    "id": "unilateral_changes",
+    "name": "Employer can change terms unilaterally",
+    "applies_to": "compensation",
+    "description": "Flag clauses letting the employer change salary, role, location, working hours, or policies at its sole discretion without the employee's consent.",
+    "severity": "medium",
+    "keywords": ["discretion", "sole", "modify", "amend", "revise", "transfer", "relocate", "reassign"]
+  },
+  {
+    "id": "overbroad_ip_assignment",
+    "name": "Overbroad intellectual property assignment",
+    "applies_to": "ip_assignment",
+    "description": "Flag intellectual property clauses that claim inventions or work created outside working hours, without company resources, or unrelated to the employer's business.",
+    "severity": "medium",
+    "keywords": ["intellectual", "property", "invention", "ip", "copyright", "patent", "assign", "assignment", "moral"]
+  },
+  {
+    "id": "open_ended_probation",
+    "name": "Open-ended or harsh probation",
+    "applies_to": "probation",
+    "description": "Flag probation periods longer than 6 months, extendable at the employer's discretion without a limit, or allowing dismissal without any notice during probation.",
+    "severity": "low",
+    "keywords": ["probation", "probationary", "confirmation", "extend", "extension"]
   }
 ]
