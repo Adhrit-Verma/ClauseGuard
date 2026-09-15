@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+langgraph
+anthropic
+pdfplumber
+pydantic
+python-dotenv
+pytest

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "liability_cap_too_low",
+    "name": "Liability cap too low or absent",
+    "applies_to": "liability",
+    "description": "Flag any liability cap set below a reasonable amount (e.g. under 12 months of fees, or under $50,000), or any clause that disclaims liability entirely for gross negligence or willful misconduct.",
+    "severity": "high"
+  },
+  {
+    "id": "auto_renewal_no_optout",
+    "name": "Auto-renewal without adequate opt-out notice",
+    "applies_to": "auto_renewal",
+    "description": "Flag auto-renewal clauses that do not give at least 30 days advance notice before renewal, or that make opting out difficult.",
+    "severity": "medium"
+  },
+  {
+    "id": "unlimited_one_sided_indemnity",
+    "name": "Unlimited or one-sided indemnification",
+    "applies_to": "indemnity",
+    "description": "Flag indemnification clauses that are one-sided (only one party indemnifies) or that impose uncapped/unlimited indemnity obligations.",
+    "severity": "high"
+  },
+  {
+    "id": "no_termination_for_convenience",
+    "name": "No termination-for-convenience option",
+    "applies_to": "termination",
+    "description": "Flag termination clauses that lack a for-convenience exit with reasonable notice (e.g. 30-60 days), locking a party into the full term.",
+    "severity": "low"
+  },
+  {
+    "id": "unfavorable_payment_terms",
+    "name": "Unfavorable payment terms",
+    "applies_to": "payment_terms",
+    "description": "Flag payment terms requiring payment in fewer than 30 days, or that impose late fees/interest above roughly 1.5% per month.",
+    "severity": "medium"
+  },
+  {
+    "id": "perpetual_or_overbroad_confidentiality",
+    "name": "Perpetual or overly broad confidentiality",
+    "applies_to": "confidentiality",
+    "description": "Flag confidentiality obligations with no expiration date, or that are broad enough to cover information that is already public.",
+    "severity": "medium"
+  },
+  {
+    "id": "unfavorable_governing_law",
+    "name": "Unfavorable governing law or venue",
+    "applies_to": "governing_law",
+    "description": "Flag governing law or venue clauses that place disputes in a jurisdiction that is inconvenient or unfavorable to the reviewing party.",
+    "severity": "low"
+  }
+]
