@@ -17,7 +17,8 @@ clauseguard/          the package -- see clauseguard/CLAUDE.md
   rules/                 the configurable rule set the Risk Analyzer checks against
   storage/                SQLite audit history
   llm.py                   LLM wrapper, Ollama or Anthropic (the one place tests mock)
-  main.py                   FastAPI app (POST /review, GET /reviews)
+  main.py                   FastAPI app (GET / web UI, POST /review, GET /reviews)
+  static/index.html          the web UI -- one file, vanilla JS, no build step
 tests/                 pytest, all LLM calls mocked -- no API key needed to run these
 sample_docs/           one synthetic NDA for local testing
 scripts/demo.py        runs the pipeline standalone, no server, real LLM calls
@@ -46,7 +47,7 @@ Two LLM providers, picked via `CLAUSEGUARD_LLM_PROVIDER` (see
 
 ```bash
 uvicorn clauseguard.main:app --reload
-# POST a PDF to http://127.0.0.1:8000/review
+# web UI: http://127.0.0.1:8000   API docs: http://127.0.0.1:8000/docs
 ```
 
 Or run the pipeline directly against the sample contract (no server, real

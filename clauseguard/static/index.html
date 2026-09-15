@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClauseGuard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2328457a'/><text x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='Georgia,serif'>§</text></svg>">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f4ef; --surface: #ffffff; --surface-2: #faf9f6; --ink: #1d1f24; --muted: #62666e; --line: #e3e0d8;
+    --accent: #28457a; --accent-ink: #ffffff; --focus: #3b6fd4;
+    --critical: #9f1d2b; --critical-bg: #fbe9eb;
+    --high: #a8420e; --high-bg: #fdeee4;
+    --medium: #855800; --medium-bg: #fdf3dc;
+    --low: #2b6149; --low-bg: #e6f2ec;
+    --radius: 10px;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111317; --surface: #1a1d22; --surface-2: #15171b; --ink: #e9e7e2; --muted: #9ba0a8; --line: #2b2f36;
+      --accent: #8eb1ee; --accent-ink: #0f1a2e; --focus: #8eb1ee;
+      --critical: #f19aa3; --critical-bg: #3a1d22;
+      --high: #f4a877; --high-bg: #3a2519;
+      --medium: #e8c46a; --medium-bg: #352c16;
+      --low: #86cfa9; --low-bg: #17302a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  [tabindex="-1"]:focus { outline: none; }
+  [hidden] { display: none !important; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+  .brand { font-family: var(--serif); font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .mark { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: 17px; }
+  .model { font: 12px var(--mono); color: var(--muted); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50vw; }
+
+  .shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: calc(100vh - 59px); }
+  .history { border-right: 1px solid var(--line); padding: 20px 14px; background: var(--surface-2); }
+  .history-head { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 10px; }
+  .history-head h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 600; }
+  .history-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .history-item { width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 9px 10px; color: inherit; font: inherit; cursor: pointer; display: grid; gap: 1px; }
+  .history-item:hover { background: var(--line); }
+  .history-item[aria-current="true"] { background: var(--surface); box-shadow: inset 3px 0 0 var(--accent), 0 0 0 1px var(--line); }
+  .h-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .h-date { font-size: 12px; color: var(--muted); }
+  .history-empty { padding: 0 8px; }
+
+  main { padding: 32px clamp(16px, 4vw, 48px) 64px; max-width: 960px; width: 100%; }
+  h1 { font-family: var(--serif); font-size: clamp(26px, 3vw, 32px); line-height: 1.2; margin: 0 0 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+
+  .btn { font: inherit; font-weight: 600; border-radius: 8px; padding: 9px 16px; cursor: pointer; border: 1px solid transparent; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; border-color: var(--line); color: var(--ink); }
+  .btn.ghost:hover { background: var(--surface); }
+  .btn.small { padding: 4px 10px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .intro p { max-width: 60ch; margin: 0; }
+  .upload { margin-top: 24px; padding: 8px; }
+  .dropzone { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 44px 20px; border: 1.5px dashed var(--line); border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; }
+  .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--surface-2); }
+  .dropzone:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .drop-icon { color: var(--accent); }
+  .drop-title { font-weight: 600; font-size: 16px; }
+  .drop-title u { color: var(--accent); text-underline-offset: 3px; }
+  .bad { color: var(--critical); }
+  .file-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 12px 6px; flex-wrap: wrap; }
+  .file-name { font: 13px var(--mono); overflow-wrap: anywhere; }
+  .steps { list-style: none; counter-reset: s; padding: 0; margin: 28px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .steps li { counter-increment: s; display: grid; gap: 2px; padding: 14px 4px 0; border-top: 2px solid var(--line); }
+  .steps li::before { content: counter(s, decimal-leading-zero); font: 12px var(--mono); color: var(--muted); }
+  .steps span { color: var(--muted); font-size: 14px; }
+
+  .loading { display: flex; gap: 20px; padding: 28px; align-items: flex-start; }
+  .loading h2, .error h2 { margin: 0 0 6px; font-size: 18px; overflow-wrap: anywhere; }
+  .loading p { margin: 0; }
+  .spinner { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; margin-top: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+  .elapsed { font: 13px var(--mono); color: var(--muted); margin-top: 10px !important; }
+  .error { padding: 24px; border-left: 4px solid var(--critical); }
+  .error p { margin: 0 0 16px; }
+
+  .report-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 20px; }
+  .report-head h1 { overflow-wrap: anywhere; }
+  .report-head p { margin: 0; }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 4px !important; font-weight: 600; }
+  .tone-critical { --tone: var(--critical); --tone-bg: var(--critical-bg); }
+  .tone-high { --tone: var(--high); --tone-bg: var(--high-bg); }
+  .tone-medium { --tone: var(--medium); --tone-bg: var(--medium-bg); }
+  .tone-low { --tone: var(--low); --tone-bg: var(--low-bg); }
+  .verdict { padding: 22px 24px; border-left: 5px solid var(--tone); }
+  .verdict-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--tone); background: var(--tone-bg); padding: 4px 12px 4px 10px; border-radius: 999px; font-size: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); }
+  .summary { font-family: var(--serif); font-size: 18px; line-height: 1.55; margin: 14px 0 10px; max-width: 68ch; }
+  .points { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 16px 0 8px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 2px; }
+  .stat-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .stat[class*="tone-"] .stat-value { color: var(--tone); }
+  .stat.zero .stat-value { color: var(--muted); font-weight: 500; }
+  .stat-label { font-size: 12px; color: var(--muted); }
+
+  .section-title { font-size: 15px; font-weight: 700; margin: 32px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .count { font: 12px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-weight: 400; }
+  .stack { display: grid; gap: 10px; }
+  .finding { padding: 16px 18px; border-left: 4px solid var(--tone); }
+  .finding-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .finding h3 { margin: 0; font-size: 15px; }
+  .pill { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--tone); background: var(--tone-bg); padding: 2px 8px; border-radius: 4px; }
+  .finding-text { margin: 8px 0; }
+  details summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; width: fit-content; }
+  blockquote { margin: 10px 0 0; padding: 10px 14px; border-left: 2px solid var(--line); background: var(--surface-2); font-family: var(--serif); border-radius: 0 6px 6px 0; }
+  .clause { padding: 14px 18px; }
+  .clause.flagged { border-left: 4px solid var(--tone); }
+  .clause-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+  .tag { font-weight: 600; background: var(--surface-2); border: 1px solid var(--line); padding: 1px 8px; border-radius: 4px; }
+  .clause-id, .conf { font-family: var(--mono); color: var(--muted); }
+  .flag { color: var(--medium); background: var(--medium-bg); padding: 1px 8px; border-radius: 4px; font-weight: 600; }
+  .clause-text { margin: 8px 0 0; font-family: var(--serif); }
+  .clause-flags { margin: 8px 0 0; font-size: 13px; color: var(--tone); font-weight: 600; }
+  .empty { padding: 16px 18px; color: var(--muted); margin: 0; }
+
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; }
+    .history { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+    .topbar { padding: 12px 16px; }
+    .loading { flex-direction: column; gap: 14px; padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark" aria-hidden="true">§</span>ClauseGuard</div>
+  <span class="model" id="model" title="Active LLM provider and model">connecting…</span>
+</header>
+
+<div class="shell">
+  <aside class="history" aria-labelledby="history-title">
+    <div class="history-head">
+      <h2 id="history-title">Past reviews</h2>
+      <button type="button" class="btn ghost small" data-action="new">New</button>
+    </div>
+    <ol id="history-list" class="history-list"></ol>
+    <p id="history-empty" class="muted small history-empty" hidden>No reviews yet.</p>
+  </aside>
+
+  <main>
+    <section id="view-upload">
+      <div class="intro">
+        <h1>Review a contract</h1>
+        <p class="muted">Upload a contract or policy PDF. ClauseGuard extracts each clause, checks it against your rule set, and writes a plain-English risk summary.</p>
+      </div>
+      <form id="upload-form" class="card upload">
+        <label id="dropzone" class="dropzone">
+          <input id="file-input" type="file" accept="application/pdf,.pdf" class="sr-only">
+          <svg class="drop-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 17v-6"/><path d="m9 13 3-3 3 3"/></svg>
+          <span class="drop-title">Drop a PDF here or <u>browse</u></span>
+          <span id="drop-hint" class="muted small">Text-based PDFs only. Scanned images aren't supported yet.</span>
+        </label>
+        <div id="file-row" class="file-row" hidden>
+          <span id="file-name" class="file-name"></span>
+          <button type="submit" class="btn primary">Review contract</button>
+        </div>
+      </form>
+      <ol class="steps" aria-label="How a review works">
+        <li><strong>Extract</strong><span>Segments the document into labeled clauses.</span></li>
+        <li><strong>Analyze</strong><span>Checks each clause against the rule set.</span></li>
+        <li><strong>Summarize</strong><span>Writes a verdict and plain-English summary.</span></li>
+      </ol>
+    </section>
+
+    <section id="view-loading" hidden>
+      <div class="card loading" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <div>
+          <h2>Reviewing <span id="loading-name"></span></h2>
+          <p class="muted">Extracting clauses, checking them against the rule set, and writing the summary. On a local CPU model this can take several minutes, and the first review is slower while the model loads.</p>
+          <p class="elapsed">Elapsed <span id="elapsed">0:00</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-error" hidden>
+      <div class="card error" role="alert">
+        <h2>Review failed</h2>
+        <p id="error-msg"></p>
+        <button type="button" class="btn primary" data-action="new">Try again</button>
+      </div>
+    </section>
+
+    <section id="view-report" hidden>
+      <div class="report-head">
+        <div>
+          <p class="eyebrow">Review report</p>
+          <h1 id="r-name"></h1>
+          <p id="r-date" class="muted small"></p>
+        </div>
+        <button type="button" class="btn ghost" data-action="new">New review</button>
+      </div>
+      <div id="r-verdict" class="card verdict">
+        <div class="verdict-label"><span class="dot" aria-hidden="true"></span><span id="r-verdict-text"></span></div>
+        <p id="r-summary" class="summary"></p>
+        <ul id="r-points" class="points"></ul>
+      </div>
+      <div id="r-stats" class="stats"></div>
+      <h2 class="section-title">Findings <span id="r-findings-count" class="count"></span></h2>
+      <div id="r-findings" class="stack"></div>
+      <h2 class="section-title">Extracted clauses <span id="r-clauses-count" class="count"></span></h2>
+      <div id="r-clauses" class="stack"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+  // All model output is rendered with textContent: it's derived from an untrusted uploaded PDF.
+  const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+  const VERDICT = { high_risk: ['High risk', 'critical'], moderate_risk: ['Moderate risk', 'medium'], low_risk: ['Low risk', 'low'] };
+  const VIEWS = ['upload', 'loading', 'error', 'report'];
+  const DEFAULT_HINT = "Text-based PDFs only. Scanned images aren't supported yet.";
+
+  let selectedFile = null;
+  let activeId = null;
+  let busy = false;
+
+  const $ = (id) => document.getElementById(id);
+  const label = (s) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  const fmtDate = (iso) => new Date(iso.replace(/(\.\d{3})\d+/, '$1'))
+    .toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function show(name) {
+    for (const v of VIEWS) $('view-' + v).hidden = v !== name;
+    window.scrollTo(0, 0);
+    const heading = $('view-' + name).querySelector('h1, h2');
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  }
+
+  function fail(message) {
+    $('error-msg').textContent = message;
+    show('error');
+  }
+
+  function resetUpload() {
+    selectedFile = null;
+    $('file-input').value = '';
+    $('file-row').hidden = true;
+    $('drop-hint').textContent = DEFAULT_HINT;
+    $('drop-hint').classList.remove('bad');
+  }
+
+  function pick(file) {
+    if (!file) return;
+    if (!/\.pdf$/i.test(file.name)) {
+      resetUpload();
+      $('drop-hint').textContent = `"${file.name}" isn't a PDF. Choose a .pdf file.`;
+      $('drop-hint').classList.add('bad');
+      return;
+    }
+    selectedFile = file;
+    $('file-name').textContent = `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB`;
+    $('file-row').hidden = false;
+    $('drop-hint').textContent = DEFAULT_HINT;
+    $('drop-hint').classList.remove('bad');
+  }
+
+  const dropzone = $('dropzone');
+  ['dragenter', 'dragover'].forEach((t) => dropzone.addEventListener(t, (e) => { e.preventDefault(); dropzone.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => dropzone.addEventListener(t, (e) => { e.preventDefault(); dropzone.classList.remove('over'); }));
+  dropzone.addEventListener('drop', (e) => pick(e.dataTransfer.files[0]));
+  // Stop the browser from navigating to a PDF dropped outside the zone.
+  ['dragover', 'drop'].forEach((t) => window.addEventListener(t, (e) => e.preventDefault()));
+  $('file-input').addEventListener('change', (e) => pick(e.target.files[0]));
+
+  $('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!selectedFile || busy) return;
+    const file = selectedFile;
+    busy = true;
+    document.querySelectorAll('[data-action="new"], .history-item').forEach((b) => (b.disabled = true));
+    $('loading-name').textContent = file.name;
+    show('loading');
+    const started = Date.now();
+    $('elapsed').textContent = '0:00';
+    const timer = setInterval(() => {
+      const s = Math.floor((Date.now() - started) / 1000);
+      $('elapsed').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }, 1000);
+
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      let res;
+      try {
+        res = await fetch('/review', { method: 'POST', body });
+      } catch {
+        return fail('Could not reach the ClauseGuard server. Is it still running?');
+      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return fail(typeof data?.detail === 'string' ? data.detail : `Review failed (HTTP ${res.status}).`);
+      renderReport(data);
+      await loadHistory(true);
+    } finally {
+      clearInterval(timer);
+      busy = false;
+      resetUpload();
+      document.querySelectorAll('[data-action="new"], .history-item').forEach((b) => (b.disabled = false));
+    }
+  });
+
+  document.querySelectorAll('[data-action="new"]').forEach((b) => b.addEventListener('click', () => {
+    if (busy) return;
+    resetUpload();
+    activeId = null;
+    markActive();
+    show('upload');
+  }));
+
+  async function loadHistory(selectNewest = false) {
+    const empty = $('history-empty');
+    try {
+      const res = await fetch('/reviews');
+      if (!res.ok) throw new Error();
+      const items = await res.json();
+      if (selectNewest && items.length) activeId = items[0].id;
+      const list = $('history-list');
+      list.replaceChildren(...items.map((item) => {
+        const button = el('button', 'history-item');
+        button.type = 'button';
+        button.dataset.id = item.id;
+        button.append(el('span', 'h-name', item.document_name), el('span', 'h-date', fmtDate(item.created_at)));
+        button.addEventListener('click', () => openReview(item.id));
+        const li = el('li');
+        li.append(button);
+        return li;
+      }));
+      empty.textContent = 'No reviews yet.';
+      empty.hidden = items.length > 0;
+      markActive();
+    } catch {
+      empty.textContent = 'Could not load past reviews.';
+      empty.hidden = false;
+    }
+  }
+
+  function markActive() {
+    document.querySelectorAll('.history-item').forEach((b) => {
+      if (Number(b.dataset.id) === activeId) b.setAttribute('aria-current', 'true');
+      else b.removeAttribute('aria-current');
+    });
+  }
+
+  async function openReview(id) {
+    if (busy) return;
+    try {
+      const res = await fetch(`/reviews/${id}`);
+      if (!res.ok) throw new Error(`Couldn't load review #${id}.`);
+      const data = await res.json();
+      activeId = id;
+      markActive();
+      renderReport(data);
+    } catch (err) {
+      fail(err instanceof TypeError ? 'Could not reach the ClauseGuard server.' : err.message);
+    }
+  }
+
+  function renderReport(r) {
+    const summary = r.executive_summary;
+    $('r-name').textContent = r.document_name;
+    $('r-date').textContent = `Reviewed ${fmtDate(r.created_at)}`;
+    const [verdictText, tone] = VERDICT[summary.verdict] || [label(summary.verdict), 'medium'];
+    $('r-verdict').className = `card verdict tone-${tone}`;
+    $('r-verdict-text').textContent = verdictText;
+    $('r-summary').textContent = summary.summary;
+    $('r-points').replaceChildren(...summary.key_points.map((p) => el('li', null, p)));
+    $('r-points').hidden = summary.key_points.length === 0;
+
+    const findings = [...r.findings].sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
+    const clausesById = new Map(r.clauses.map((c) => [c.id, c]));
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+    findings.forEach((f) => counts[f.severity]++);
+
+    $('r-stats').replaceChildren(
+      stat('Clauses', r.clauses.length),
+      stat('Findings', findings.length),
+      ...Object.keys(counts).map((s) => stat(label(s), counts[s], s)),
+    );
+
+    $('r-findings-count').textContent = findings.length;
+    $('r-findings').replaceChildren(...(findings.length
+      ? findings.map((f) => findingCard(f, clausesById.get(f.clause_id)))
+      : [el('p', 'card empty', 'No rule violations found in the extracted clauses.')]));
+
+    $('r-clauses-count').textContent = r.clauses.length;
+    $('r-clauses').replaceChildren(...(r.clauses.length
+      ? r.clauses.map((c) => clauseCard(c, findings.filter((f) => f.clause_id === c.id)))
+      : [el('p', 'card empty', 'No clauses could be extracted from this document.')]));
+
+    show('report');
+  }
+
+  function stat(name, value, tone) {
+    const card = el('div', `stat${tone ? ` tone-${tone}` : ''}${tone && !value ? ' zero' : ''}`);
+    card.append(el('span', 'stat-value', String(value)), el('span', 'stat-label', name));
+    return card;
+  }
+
+  function findingCard(f, clause) {
+    const card = el('article', `card finding tone-${f.severity}`);
+    const top = el('div', 'finding-top');
+    top.append(el('span', 'pill', label(f.severity)), el('h3', null, f.rule_name));
+    const details = el('details');
+    details.append(el('summary', null, clause
+      ? `View clause ${clause.id} · ${label(clause.type)}`
+      : `Clause ${f.clause_id} (not in extracted list)`));
+    if (clause) details.append(el('blockquote', null, clause.text));
+    card.append(top, el('p', 'finding-text', f.explanation), details);
+    return card;
+  }
+
+  function clauseCard(c, clauseFindings) {
+    const worst = clauseFindings.reduce((w, f) => (w === null || SEV_ORDER[f.severity] < SEV_ORDER[w] ? f.severity : w), null);
+    const card = el('article', `card clause${worst ? ` flagged tone-${worst}` : ''}`);
+    const head = el('div', 'clause-head');
+    head.append(el('span', 'tag', label(c.type)), el('span', 'clause-id', c.id), el('span', 'conf', `${Math.round(c.confidence * 100)}% confidence`));
+    if (c.confidence < 0.7) head.append(el('span', 'flag', 'Low confidence · verify manually'));
+    card.append(head, el('p', 'clause-text', c.text));
+    if (clauseFindings.length) card.append(el('p', 'clause-flags', `Flagged: ${clauseFindings.map((f) => f.rule_name).join(' · ')}`));
+    return card;
+  }
+
+  fetch('/api/info')
+    .then((res) => res.json())
+    .then((i) => ($('model').textContent = `${i.provider} · ${i.model}`))
+    .catch(() => ($('model').textContent = 'server offline'));
+  loadHistory();
+</script>
+</body>
+</html>

@@ -21,6 +21,8 @@ PROVIDER = os.environ.get(
 )
 MODEL = os.environ.get("CLAUSEGUARD_MODEL", _DEFAULT_MODELS[PROVIDER])
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# Per-call read timeout. A cold qwen2.5:14b load on a mostly-CPU machine exceeded 180s; tune per machine.
+OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "600"))
 
 _anthropic_client = None
 
@@ -51,7 +53,7 @@ def _call_ollama(system: str, user: str) -> str:
     request = urllib.request.Request(
         f"{OLLAMA_HOST}/api/generate", data=payload, headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(request, timeout=180) as response:
+    with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT) as response:
         data = json.loads(response.read())
     return data["response"]
 

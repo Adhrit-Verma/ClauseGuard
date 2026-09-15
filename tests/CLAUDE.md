@@ -8,6 +8,9 @@ pytest, every LLM call mocked via `monkeypatch.setattr(<agent module>,
   one agent each, in isolation.
 - `test_rules_loader.py` -- default rule set loads and validates.
 - `test_llm.py` -- the markdown-fence-stripping JSON parser.
+- `test_api.py` -- FastAPI layer via `TestClient`: UI served, `/api/info`,
+  upload/LLM failures mapping to 400/502/503/504, and that the pipeline
+  runs off the event loop (patches `main.run_review`).
 - `test_graph.py` -- end-to-end through `graph.run_review`, including the
   skip-Risk-Analyzer-when-no-clauses branch (asserts `call_llm` is never
   called on that path, not just that the result looks right).
