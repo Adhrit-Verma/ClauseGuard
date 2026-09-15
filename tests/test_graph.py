@@ -10,15 +10,12 @@ def test_run_review_full_pipeline(monkeypatch):
     monkeypatch.setattr(
         extractor,
         "call_llm",
-        lambda system, user: '{"clauses": [{"id": "c1", "type": "liability", "text": "Cap at $100.", "confidence": 0.9}]}',
+        lambda system, user: '{"clauses": [{"type": "liability", "start": 1, "end": 1, "confidence": 0.9}]}',
     )
     monkeypatch.setattr(
         risk_analyzer,
         "call_llm",
-        lambda system, user: (
-            '{"findings": [{"clause_id": "c1", "rule_id": "liability_cap_too_low", '
-            '"rule_name": "Liability cap too low", "severity": "high", "explanation": "Too low."}]}'
-        ),
+        lambda system, user: '{"checks": [[1, true, "Too low."]]}',
     )
     monkeypatch.setattr(
         summarizer,

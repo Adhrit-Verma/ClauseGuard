@@ -5,7 +5,7 @@ instead of silently corrupting a downstream agent."""
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ClauseType(str, Enum):
@@ -65,6 +65,45 @@ class RiskAnalysisResult(BaseModel):
 
 class ExecutiveSummary(BaseModel):
     verdict: RiskVerdict
+    summary: str
+    key_points: list[str]
+
+
+# Raw LLM outputs, before an agent fills in what code can derive itself. Output tokens are nearly
+# all of a review's wall time, so the model is asked only for what it alone can judge.
+class _Row(BaseModel):
+    """Also accepts a compact JSON row in field order, e.g. ["liability", 5, 0.9]:
+    rows cost about half the output tokens of {"type": ..., "start": ...} objects."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_row(cls, value):
+        if isinstance(value, (list, tuple)):
+            return dict(zip(cls.model_fields, value))
+        return value
+
+
+class ClauseSpan(_Row):
+    type: ClauseType
+    start: int = Field(ge=1)
+    confidence: float = Field(ge=0, le=1, default=1.0)
+
+
+class ClauseSpans(BaseModel):
+    clauses: list[ClauseSpan]
+
+
+class RiskCheck(_Row):
+    index: int = Field(ge=1)
+    violates: bool
+    reason: str = ""
+
+
+class RiskChecks(BaseModel):
+    checks: list[RiskCheck]
+
+
+class SummaryDraft(BaseModel):
     summary: str
     key_points: list[str]
 

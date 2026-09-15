@@ -1,33 +1,34 @@
-"""Summarizer agent: synthesizes clauses + risk findings into a plain-English
-executive summary with a top-line verdict."""
+"""Summarizer agent: turns risk findings into a plain-English executive summary.
+
+The verdict is computed from finding severities rather than asked of the model: the rule is
+fixed, and a small model was observed calling a high-severity finding "moderate_risk"."""
 
 from clauseguard.llm import call_llm, parse_json_response
-from clauseguard.models.schemas import Clause, ExecutiveSummary, RiskFinding
+from clauseguard.models.schemas import Clause, ExecutiveSummary, RiskFinding, RiskVerdict, Severity, SummaryDraft
 
-SYSTEM_PROMPT = """You are a contract review summarization engine. Given a \
-list of extracted clauses and the risk findings against them, write a \
-plain-English executive summary a non-lawyer can read in under a minute, \
-plus an overall risk verdict.
+SYSTEM_PROMPT = """You write executive summaries of contract risk reviews for non-lawyers. \
+Given the clause types found and the risk findings, respond with ONLY JSON, no prose:
+{"summary": "<at most 2 sentences>", "key_points": ["<at most 10 words>"]}
 
-Respond with ONLY a JSON object of this exact shape, no prose:
-{"verdict": "low_risk|moderate_risk|high_risk", "summary": "<2-4 sentence summary>", "key_points": ["<bullet>", ...]}
+Use at most 4 key points, most serious first. If there are no findings, say no risks were found."""
 
-Base the verdict on the number and severity of findings: no findings or only \
-low severity -> low_risk; some medium severity -> moderate_risk; any high or \
-critical severity, or many medium findings -> high_risk."""
+_SEVERITY_ORDER = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2, Severity.LOW: 3}
+
+
+def verdict_for(findings: list[RiskFinding]) -> RiskVerdict:
+    severities = [finding.severity for finding in findings]
+    if Severity.HIGH in severities or Severity.CRITICAL in severities or severities.count(Severity.MEDIUM) >= 3:
+        return RiskVerdict.HIGH_RISK
+    if Severity.MEDIUM in severities:
+        return RiskVerdict.MODERATE_RISK
+    return RiskVerdict.LOW_RISK
 
 
 def summarize(clauses: list[Clause], findings: list[RiskFinding]) -> ExecutiveSummary:
-    clauses_block = "\n".join(f"- id={c.id} type={c.type.value}: {c.text}" for c in clauses) or "(none extracted)"
-    findings_block = (
-        "\n".join(
-            f"- clause={f.clause_id} rule={f.rule_name} severity={f.severity.value}: {f.explanation}"
-            for f in findings
-        )
-        or "(no risk findings)"
-    )
-    user_prompt = f"Clauses:\n{clauses_block}\n\nRisk findings:\n{findings_block}"
+    clause_types = ", ".join(sorted({clause.type.value for clause in clauses})) or "none"
+    ordered = sorted(findings, key=lambda f: _SEVERITY_ORDER[f.severity])
+    findings_block = "\n".join(f"- {f.severity.value}: {f.rule_name} -- {f.explanation}" for f in ordered)
+    user_prompt = f"Clause types found: {clause_types}\n\nRisk findings:\n{findings_block or '(no risk findings)'}"
 
-    raw = call_llm(SYSTEM_PROMPT, user_prompt)
-    data = parse_json_response(raw)
-    return ExecutiveSummary.model_validate(data)
+    draft = SummaryDraft.model_validate(parse_json_response(call_llm(SYSTEM_PROMPT, user_prompt)))
+    return ExecutiveSummary(verdict=verdict_for(findings), summary=draft.summary, key_points=draft.key_points[:4])

@@ -6,7 +6,7 @@ calls.
 Two providers supported via CLAUSEGUARD_LLM_PROVIDER:
 - "anthropic" (default when ANTHROPIC_API_KEY is set) -- paid, needs a key.
 - "ollama" (default otherwise) -- free, local, needs `ollama serve` running
-  and the model pulled (`ollama pull qwen2.5:14b`).
+  and the model pulled (`ollama pull qwen2.5:7b`).
 """
 
 import json
@@ -14,15 +14,26 @@ import os
 import re
 import urllib.request
 
-_DEFAULT_MODELS = {"anthropic": "claude-sonnet-5", "ollama": "qwen2.5:14b"}
+# qwen2.5:7b, not 14b: on a 6GB GPU 14b ran 73% on CPU (~4.6 tok/s, ~210s per review); 7b runs mostly
+# on GPU (~22-25 tok/s). 3b is faster still but missed clauses and the most obvious risks in testing.
+_DEFAULT_MODELS = {"anthropic": "claude-sonnet-5", "ollama": "qwen2.5:7b"}
 
 PROVIDER = os.environ.get(
     "CLAUSEGUARD_LLM_PROVIDER", "anthropic" if os.environ.get("ANTHROPIC_API_KEY") else "ollama"
 )
 MODEL = os.environ.get("CLAUSEGUARD_MODEL", _DEFAULT_MODELS[PROVIDER])
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# 127.0.0.1, not localhost: on Windows urllib tries ::1 first, Ollama listens on IPv4 only, and the
+# refused IPv6 attempt costs ~2s per call (measured: 2.1s vs 0.003s).
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 # Per-call read timeout. A cold qwen2.5:14b load on a mostly-CPU machine exceeded 180s; tune per machine.
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "600"))
+# How long Ollama keeps the model in memory after a call. Reloading costs seconds to minutes;
+# "-1" keeps it forever but pins the VRAM, so the default trades that for a long idle window.
+OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
+# Fixed per process on purpose: a request with a different num_ctx makes Ollama reload the model.
+# Bigger contexts reserve more VRAM and can push layers onto the CPU (several times slower).
+# ponytail: documents longer than this many tokens get truncated by Ollama; raise it for long contracts.
+OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 
 _anthropic_client = None
 
@@ -46,16 +57,38 @@ def _call_anthropic(system: str, user: str) -> str:
     return response.content[0].text
 
 
-def _call_ollama(system: str, user: str) -> str:
-    payload = json.dumps(
-        {"model": MODEL, "system": system, "prompt": user, "stream": False, "format": "json"}
-    ).encode("utf-8")
+def _ollama_generate(payload: dict) -> dict:
+    body = {
+        "model": MODEL,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "options": {"num_ctx": OLLAMA_NUM_CTX, "temperature": 0},
+        **payload,
+    }
     request = urllib.request.Request(
-        f"{OLLAMA_HOST}/api/generate", data=payload, headers={"Content-Type": "application/json"}
+        f"{OLLAMA_HOST}/api/generate",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT) as response:
-        data = json.loads(response.read())
-    return data["response"]
+        return json.loads(response.read())
+
+
+def _call_ollama(system: str, user: str) -> str:
+    # ponytail: ~3.5 chars/token estimate, not a real tokenizer. Ollama silently truncates prompts that
+    # overflow num_ctx (dropping clauses), so refuse loudly instead, keeping 1024 tokens for the reply.
+    if (len(system) + len(user)) / 3.5 + 1024 > OLLAMA_NUM_CTX:
+        raise RuntimeError(
+            f"This document is too long for the model's context window (OLLAMA_NUM_CTX={OLLAMA_NUM_CTX}). "
+            "Raise OLLAMA_NUM_CTX in .env -- it uses more VRAM and can be slower."
+        )
+    return _ollama_generate({"system": system, "prompt": user, "stream": False, "format": "json"})["response"]
+
+
+def preload() -> None:
+    """Loads the model into memory ahead of the first review (an empty prompt only loads it).
+    Uses the same options as real calls, or the first review would trigger a reload anyway."""
+    if PROVIDER == "ollama":
+        _ollama_generate({"stream": False})
 
 
 def call_llm(system: str, user: str) -> str:

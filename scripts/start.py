@@ -94,6 +94,10 @@ def main() -> None:
     if llm.PROVIDER == "ollama":
         _ensure_ollama_running()
         _ensure_model_pulled()
+        print(f"Loading {llm.MODEL} into memory so the first review doesn't pay for it...")
+        started = time.monotonic()
+        llm.preload()
+        print(f"Model ready in {time.monotonic() - started:.1f}s.")
     else:
         print(f"Using provider={llm.PROVIDER} model={llm.MODEL} -- skipping Ollama startup.")
 

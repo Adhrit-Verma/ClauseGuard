@@ -5,9 +5,14 @@ pytest, every LLM call mocked via `monkeypatch.setattr(<agent module>,
 
 - `conftest.py` -- shared fixtures: `sample_clauses`, `sample_rules`.
 - `test_extractor.py`, `test_risk_analyzer.py`, `test_summarizer.py` --
-  one agent each, in isolation.
+  one agent each, in isolation. They pin the code-side half of each
+  agent: turning start lines into clause text (next start = end, snapping
+  onto a skipped numbered heading, dropping bad rows), mapping numbered
+  checklist answers back to clause/rule pairs with severity from the rule
+  set, and computing the verdict regardless of what the model claims.
 - `test_rules_loader.py` -- default rule set loads and validates.
-- `test_llm.py` -- the markdown-fence-stripping JSON parser.
+- `test_llm.py` -- the markdown-fence-stripping JSON parser, and the
+  context-overflow guard (refuses a too-long prompt before calling Ollama).
 - `test_db.py` -- the review status lifecycle (extracting -> ... -> done
   or failed) directly against `storage/db.py`, plus the schema migration
   from a hand-built legacy table with no status/error columns.

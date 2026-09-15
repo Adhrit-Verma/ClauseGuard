@@ -10,8 +10,7 @@ next agent.
   confidentiality, indemnity, auto_renewal, governing_law, other).
 - `Rule` -- one entry from the configurable rule set (see
   [rules/](../rules/CLAUDE.md)). `applies_to` is a `ClauseType`, so the
-  Risk Analyzer can cheaply filter to only the rules relevant to the
-  clauses actually present.
+  Risk Analyzer only checks each clause against rules for its own type.
 - `RiskFinding` / `RiskAnalysisResult` -- Risk Analyzer's output. Links a
   finding back to both the clause (`clause_id`) and the rule it violated.
 - `ExecutiveSummary` -- Summarizer's output. `RiskVerdict` is the top-line
@@ -26,6 +25,16 @@ next agent.
 - `ReviewRecord` -- what `POST /review` (immediately) and `GET
   /reviews/{id}` (on every poll) return: `id`, `status`, and either
   `report` (once done) or `error` (once failed) -- never both.
+- `ClauseSpan(s)`, `RiskCheck(s)`, `SummaryDraft` -- the *raw* LLM outputs,
+  deliberately smaller than the models above. Each agent validates the
+  model's JSON against one of these, then builds the full `Clause` /
+  `RiskFinding` / `ExecutiveSummary` by adding what code already knows
+  (clause text, which rule a check was about, rule name/severity, verdict).
+  `ClauseSpan` and `RiskCheck` subclass `_Row`, which also accepts a
+  compact JSON row in field order (`["liability", 5, 0.9]`,
+  `[1, true, "reason"]`) -- that's what the prompts ask for. Field order is
+  therefore part of the contract: don't reorder those fields without
+  updating the prompts.
 
 Adding a new clause type or a new finding field means editing this file
 first -- everything downstream (rules JSON, prompts, DB storage) follows

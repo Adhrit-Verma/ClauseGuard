@@ -146,3 +146,11 @@ def test_review_reports_stage_transitions(monkeypatch):
 
 def test_unknown_review_id_returns_404():
     assert client.get("/reviews/999999").status_code == 404
+
+
+def test_review_unexpected_error_marks_failed_instead_of_stuck(monkeypatch):
+    monkeypatch.setattr(main, "run_review", _raises(RuntimeError("document too long")))
+    review_id = _post("nda.pdf", SAMPLE_PDF).json()["id"]
+    record = client.get(f"/reviews/{review_id}").json()
+    assert record["status"] == "failed"
+    assert "document too long" in record["error"]

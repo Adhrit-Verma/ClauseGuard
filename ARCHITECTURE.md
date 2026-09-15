@@ -130,6 +130,13 @@ SLA, or an HR policy without touching agent code.
   text tied to the actual clause. Still not a guarantee -- the next lever
   is a confidence/severity threshold below which a finding gets flagged
   "needs human review" instead of surfaced as fact.
+- **LLM under-reports violations.** The opposite failure, and on a small
+  local model the more common one: asked to "list every violation," qwen2.5:7b
+  stopped after 1-2 of the ~6 real ones in the sample NDA. The Risk Analyzer
+  now sends a numbered checklist (one row per clause/rule pair) that the
+  model must answer row by row, which caught 5-7 in the same single call.
+  Results still vary between identical runs, so a missed finding on one run
+  is not proof the clause is clean.
 - **Malformed JSON from the LLM.** Handled today: `parse_json_response`
   strips markdown fences, and Pydantic validation raises loudly rather
   than passing a partial object downstream. Not handled today: automatic
@@ -150,3 +157,10 @@ SLA, or an HR policy without touching agent code.
   deployment would need a real job queue (e.g. Celery/RQ) instead of an
   in-process background task, since a review started on one worker isn't
   visible to another anyway.
+- **Document longer than the model's context window.** Ollama silently
+  truncates an over-long prompt, which would drop clauses with no error.
+  `llm.py` estimates the prompt size first (~3.5 chars/token) and fails
+  the review with a "raise `OLLAMA_NUM_CTX`" message instead. It's an
+  estimate, not a tokenizer, so a document right at the limit can be
+  wrongly rejected or slip through; the real fix for long contracts is
+  splitting the document into sections (not built).

@@ -43,7 +43,8 @@ Two LLM providers, picked via `CLAUSEGUARD_LLM_PROVIDER` (see
 
 - **ollama** (default if `ANTHROPIC_API_KEY` is unset) -- free, local, no
   key. Needs `ollama serve` running and a model pulled
-  (`ollama pull qwen2.5:14b`).
+  (`ollama pull qwen2.5:7b`). 7b is the default because it fits mostly
+  on a 6GB GPU; 14b spills onto the CPU and is ~20x slower per review.
 - **anthropic** (default if `ANTHROPIC_API_KEY` is set) -- paid, needs a
   key from console.anthropic.com in `.env`. Higher-quality extraction and
   risk analysis than a small local model.

@@ -8,7 +8,9 @@
   for the review to finish. The pipeline (`_process_review`) then runs
   off-request: on success it calls `db.complete_review`, on an LLM
   failure (`OSError`/`ValueError` from `run_review`) it calls
-  `db.fail_review` with a readable message. `GET /reviews` lists every
+  `db.fail_review` with a readable message; any other exception is
+  logged and also marks the review failed, so a review can never sit
+  mid-stage forever. `GET /reviews` lists every
   review with its current status; `GET /reviews/{id}` is what a client
   polls -- see FLOW.md for the full id-based job lifecycle and why it
   survives a browser refresh.

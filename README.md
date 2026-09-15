@@ -35,7 +35,7 @@ Pick an LLM backend (see [clauseguard/llm.py](clauseguard/llm.py)):
 - **Ollama** (free, local, default when no key is set) — install from
   [ollama.com](https://ollama.com), then:
   ```bash
-  ollama pull qwen2.5:14b
+  ollama pull qwen2.5:7b
   ```
 - **Anthropic** (paid, better quality) — put `ANTHROPIC_API_KEY` in `.env`.
 

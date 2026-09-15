@@ -258,7 +258,7 @@
     analyzing: 'Checking each clause against the rule set.',
     summarizing: 'Writing the verdict and executive summary.',
   };
-  const POLL_MS = 3000;
+  const POLL_MS = 1000;
   const MAX_POLL_ERRORS = 5;
   // The server is the source of truth for a review's progress (see storage/db.py); this key just
   // remembers *which* review to resume polling after a refresh, not any progress state itself.

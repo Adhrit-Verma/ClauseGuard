@@ -2,19 +2,39 @@
 
 The three agents plus the graph that wires them together. Each agent is a
 plain function: (validated input) -> LLM call -> (validated Pydantic
-output). None of them touch the Anthropic SDK directly -- they call
+output). None of them touch an LLM backend directly -- they call
 `clauseguard.llm.call_llm`, which is what tests monkeypatch.
 
+Speed rule for all three: output tokens are ~95% of a review's wall time
+(measured), so each prompt asks the model only for what it alone can judge,
+as compact JSON rows, and code fills in everything derivable. Don't add
+fields to an LLM output schema that code already knows. Accuracy was
+measured against the sample NDA alongside speed -- a format that saved
+seconds but lost findings was rejected (see git history).
+
 - `extractor.py` -- `extract_clauses(document_text) -> ExtractionResult`.
-  One LLM call, asks for clause segmentation + typing as JSON.
+  Sends the document as numbered non-blank lines; the model returns one row
+  per clause, `[type, start_line, confidence]` -- never clause text, never
+  an end line. Each clause runs until the next one starts. Code drops
+  out-of-range starts, keeps the first of duplicate starts, and snaps a
+  start back one line when the line above is an unclaimed numbered heading
+  (the model consistently lands one line past headings like
+  "4. Indemnification."). Trailing non-clause text is absorbed into the
+  last clause.
 - `risk_analyzer.py` -- `analyze_risk(clauses, rules) -> RiskAnalysisResult`.
-  Filters `rules` down to only the ones whose `applies_to` matches a
-  clause type actually present, and skips the LLM call entirely if there
-  are no clauses or no applicable rules -- see the conditional routing note
-  below.
+  Code builds every (clause, rule-for-that-clause's-type) pair and sends
+  them as a numbered checklist; the model must answer each row
+  `[check_number, true/false, <=12-word reason]`. Skips the LLM call
+  entirely if there are no pairs -- see the conditional routing note
+  below. An open-ended "list the violations" prompt caught 1-2 of ~6 real
+  violations; the checklist caught 5-7 in the same single call. `rule_name`
+  and `severity` come from the rule set, never the model; unknown check
+  numbers are ignored and duplicates keep the first answer.
 - `summarizer.py` -- `summarize(clauses, findings) -> ExecutiveSummary`.
-  Always runs, even with zero clauses/findings (produces a "nothing found"
-  summary).
+  Always runs, even with zero clauses/findings. The model writes only
+  `summary` + up to 4 `key_points`; `verdict` comes from `verdict_for()`
+  (any high/critical or 3+ medium -> high_risk, any medium -> moderate,
+  else low) because a small model was seen misjudging it.
 - `graph.py` -- LangGraph `StateGraph` wiring: `extract -> [analyze?] ->
   summarize -> END`. `ReviewState` is the shared TypedDict all three nodes
   read/write. `run_review(document_text, on_stage=None)` is the single

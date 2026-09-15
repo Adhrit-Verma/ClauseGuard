@@ -4,6 +4,7 @@ background, returning immediately with an id to poll -- see
 storage/db.py for why a review is a row from the moment it's uploaded."""
 
 import io
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +48,10 @@ def _process_review(review_id: int, document_name: str, text: str) -> None:
         return
     except ValueError:  # JSONDecodeError or Pydantic ValidationError on model output
         db.fail_review(review_id, "The model returned malformed output. Please try again.", path=DB_PATH)
+        return
+    except Exception as exc:  # anything else would leave the review stuck mid-stage forever
+        logging.getLogger(__name__).exception("Review %s failed", review_id)
+        db.fail_review(review_id, f"Review failed: {exc}", path=DB_PATH)
         return
 
     report = ReviewReport(

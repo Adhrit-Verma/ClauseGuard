@@ -1,23 +1,34 @@
 from clauseguard.agents import summarizer
+from clauseguard.models.schemas import RiskFinding
 
 
-def test_summarize_returns_executive_summary(monkeypatch, sample_clauses):
-    fake_response = (
-        '{"verdict": "high_risk", "summary": "This NDA has a very low liability cap.", '
-        '"key_points": ["Liability capped at $100", "Auto-renews with short notice"]}'
-    )
-    monkeypatch.setattr(summarizer, "call_llm", lambda system, user: fake_response)
+def _finding(severity: str) -> RiskFinding:
+    return RiskFinding(clause_id="c1", rule_id="r", rule_name="Rule", severity=severity, explanation="x")
 
-    result = summarizer.summarize(sample_clauses, findings=[])
+
+def test_summarize_takes_text_from_model_but_computes_verdict(monkeypatch, sample_clauses):
+    # The model claims low risk; a high-severity finding must still produce high_risk.
+    fake = '{"verdict": "low_risk", "summary": "Low cap.", "key_points": ["a", "b", "c", "d", "e"]}'
+    monkeypatch.setattr(summarizer, "call_llm", lambda system, user: fake)
+
+    result = summarizer.summarize(sample_clauses, [_finding("high")])
 
     assert result.verdict.value == "high_risk"
-    assert len(result.key_points) == 2
+    assert result.summary == "Low cap."
+    assert result.key_points == ["a", "b", "c", "d"]
+
+
+def test_verdict_rule():
+    def verdict(severities):
+        return summarizer.verdict_for([_finding(s) for s in severities]).value
+
+    assert verdict([]) == "low_risk"
+    assert verdict(["low", "low"]) == "low_risk"
+    assert verdict(["medium", "low"]) == "moderate_risk"
+    assert verdict(["medium"] * 3) == "high_risk"
+    assert verdict(["critical"]) == "high_risk"
 
 
 def test_summarize_handles_no_clauses_or_findings(monkeypatch):
-    fake_response = '{"verdict": "low_risk", "summary": "No clauses found.", "key_points": []}'
-    monkeypatch.setattr(summarizer, "call_llm", lambda system, user: fake_response)
-
-    result = summarizer.summarize([], [])
-
-    assert result.verdict.value == "low_risk"
+    monkeypatch.setattr(summarizer, "call_llm", lambda system, user: '{"summary": "No clauses found.", "key_points": []}')
+    assert summarizer.summarize([], []).verdict.value == "low_risk"
