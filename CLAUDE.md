@@ -17,10 +17,15 @@ clauseguard/          the package -- see clauseguard/CLAUDE.md
   rules/                 the configurable rule set the Risk Analyzer checks against
   storage/                SQLite audit history
   llm.py                   LLM wrapper, Ollama or Anthropic (the one place tests mock)
-  main.py                   FastAPI app (GET / web UI, POST /review, GET /reviews)
-  static/index.html          the web UI -- one file, vanilla JS, no build step
+  main.py                   FastAPI app: POST /review returns immediately (202),
+                              the pipeline runs as a background task, progress is
+                              polled via GET /reviews/{id} -- see FLOW.md
+  static/index.html          the web UI -- one file, vanilla JS, no build step,
+                              resumes an in-progress review after a page refresh
 tests/                 pytest, all LLM calls mocked -- no API key needed to run these
 sample_docs/           one synthetic NDA for local testing
+scripts/start.py       one-command launch: checks/starts Ollama, pulls the
+                         model if missing, starts the server, opens the browser
 scripts/demo.py        runs the pipeline standalone, no server, real LLM calls
 ```
 
@@ -46,8 +51,18 @@ Two LLM providers, picked via `CLAUSEGUARD_LLM_PROVIDER` (see
 ## Running
 
 ```bash
+python scripts/start.py
+```
+
+One command: makes sure Ollama is up (starts `ollama serve` and pulls the
+configured model if it's missing -- skipped if `CLAUSEGUARD_LLM_PROVIDER`
+is `anthropic`), starts the FastAPI server, and opens
+http://127.0.0.1:8000 in your browser. API docs at `/docs`.
+
+For manual control (server already running elsewhere, custom flags):
+
+```bash
 uvicorn clauseguard.main:app --reload
-# web UI: http://127.0.0.1:8000   API docs: http://127.0.0.1:8000/docs
 ```
 
 Or run the pipeline directly against the sample contract (no server, real
@@ -77,3 +92,7 @@ whole suite runs offline with no API key.
 - The rule set is data (`clauseguard/rules/default_rules.json`), not code --
   point `CLAUSEGUARD_RULES_FILE` at a different file to review a different
   document type without touching the Risk Analyzer.
+- A review's progress lives in SQLite (`status` column), not in server
+  memory or a WebSocket -- `GET /reviews/{id}` is always the source of
+  truth, which is what lets a browser refresh reconnect mid-review
+  instead of losing track of it. See FLOW.md.

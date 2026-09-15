@@ -51,6 +51,12 @@
   .history-item[aria-current="true"] { background: var(--surface); box-shadow: inset 3px 0 0 var(--accent), 0 0 0 1px var(--line); }
   .h-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .h-date { font-size: 12px; color: var(--muted); }
+  .h-status { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+  .h-status.progress { color: var(--accent); }
+  .h-status.failed { color: var(--critical); }
+  .h-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+  .h-status.progress .h-dot { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
   .history-empty { padding: 0 8px; }
 
   main { padding: 32px clamp(16px, 4vw, 48px) 64px; max-width: 960px; width: 100%; }
@@ -83,15 +89,28 @@
   .steps li::before { content: counter(s, decimal-leading-zero); font: 12px var(--mono); color: var(--muted); }
   .steps span { color: var(--muted); font-size: 14px; }
 
-  .loading { display: flex; gap: 20px; padding: 28px; align-items: flex-start; }
+  .loading { padding: 28px; }
   .loading h2, .error h2 { margin: 0 0 6px; font-size: 18px; overflow-wrap: anywhere; }
   .loading p { margin: 0; }
-  .spinner { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; margin-top: 2px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
-  .elapsed { font: 13px var(--mono); color: var(--muted); margin-top: 10px !important; }
   .error { padding: 24px; border-left: 4px solid var(--critical); }
   .error p { margin: 0 0 16px; }
+
+  /* Step-wise progress tracker: mirrors the pipeline's own extract -> analyze -> summarize stages,
+     so what the UI shows always matches the status the server is tracking for this review. */
+  .stepper { list-style: none; display: flex; padding: 0; margin: 18px 0; }
+  .stepper li { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .stepper li:not(:last-child) { margin-right: 8px; }
+  .stepper li:not(:last-child)::after { content: ''; width: 20px; height: 1px; background: var(--line); margin-left: 8px; }
+  .step-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); display: inline-grid; place-items: center; flex: none; font-size: 10px; color: var(--accent-ink); }
+  .stepper li.done { color: var(--ink); }
+  .stepper li.done .step-dot { background: var(--accent); border-color: var(--accent); }
+  .stepper li.done .step-dot::before { content: '✓'; }
+  .stepper li.current { color: var(--ink); }
+  .stepper li.current .step-dot { border-color: var(--accent); border-top-color: transparent; animation: spin .9s linear infinite; }
+  .stepper li.stalled .step-dot { border-color: var(--critical); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .stepper li.current .step-dot { animation-duration: 3s; } }
+  .elapsed { font: 13px var(--mono); color: var(--muted); margin-top: 14px !important; }
 
   .report-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 20px; }
   .report-head h1 { overflow-wrap: anywhere; }
@@ -137,7 +156,8 @@
     .shell { grid-template-columns: 1fr; }
     .history { order: 2; border-right: 0; border-top: 1px solid var(--line); }
     .topbar { padding: 12px 16px; }
-    .loading { flex-direction: column; gap: 14px; padding: 20px; }
+    .loading { padding: 20px; }
+    .stepper { flex-wrap: wrap; row-gap: 10px; }
   }
 </style>
 </head>
@@ -161,7 +181,7 @@
     <section id="view-upload">
       <div class="intro">
         <h1>Review a contract</h1>
-        <p class="muted">Upload a contract or policy PDF. ClauseGuard extracts each clause, checks it against your rule set, and writes a plain-English risk summary.</p>
+        <p class="muted">Upload a contract or policy PDF. ClauseGuard extracts each clause, checks it against your rule set, and writes a plain-English risk summary. A review keeps running on the server even if you close or refresh this tab -- reopen it any time from Past reviews.</p>
       </div>
       <form id="upload-form" class="card upload">
         <label id="dropzone" class="dropzone">
@@ -172,7 +192,7 @@
         </label>
         <div id="file-row" class="file-row" hidden>
           <span id="file-name" class="file-name"></span>
-          <button type="submit" class="btn primary">Review contract</button>
+          <button id="submit-btn" type="submit" class="btn primary">Review contract</button>
         </div>
       </form>
       <ol class="steps" aria-label="How a review works">
@@ -184,12 +204,14 @@
 
     <section id="view-loading" hidden>
       <div class="card loading" role="status" aria-live="polite">
-        <div class="spinner" aria-hidden="true"></div>
-        <div>
-          <h2>Reviewing <span id="loading-name"></span></h2>
-          <p class="muted">Extracting clauses, checking them against the rule set, and writing the summary. On a local CPU model this can take several minutes, and the first review is slower while the model loads.</p>
-          <p class="elapsed">Elapsed <span id="elapsed">0:00</span></p>
-        </div>
+        <h2>Reviewing <span id="loading-name"></span></h2>
+        <ol id="stepper" class="stepper" aria-label="Review progress">
+          <li data-stage="extracting"><span class="step-dot" aria-hidden="true"></span>Extract</li>
+          <li data-stage="analyzing"><span class="step-dot" aria-hidden="true"></span>Analyze</li>
+          <li data-stage="summarizing"><span class="step-dot" aria-hidden="true"></span>Summarize</li>
+        </ol>
+        <p id="loading-detail" class="muted"></p>
+        <p class="elapsed">Elapsed <span id="elapsed">0:00</span> · this review keeps going even if you leave this page</p>
       </div>
     </section>
 
@@ -230,15 +252,30 @@
   const VERDICT = { high_risk: ['High risk', 'critical'], moderate_risk: ['Moderate risk', 'medium'], low_risk: ['Low risk', 'low'] };
   const VIEWS = ['upload', 'loading', 'error', 'report'];
   const DEFAULT_HINT = "Text-based PDFs only. Scanned images aren't supported yet.";
+  const STAGES = ['extracting', 'analyzing', 'summarizing'];
+  const STAGE_DETAIL = {
+    extracting: 'Reading the document and segmenting it into clauses.',
+    analyzing: 'Checking each clause against the rule set.',
+    summarizing: 'Writing the verdict and executive summary.',
+  };
+  const POLL_MS = 3000;
+  const MAX_POLL_ERRORS = 5;
+  // The server is the source of truth for a review's progress (see storage/db.py); this key just
+  // remembers *which* review to resume polling after a refresh, not any progress state itself.
+  const ACTIVE_KEY = 'clauseguard:activeReviewId';
 
   let selectedFile = null;
-  let activeId = null;
-  let busy = false;
+  let activeId = null; // history item currently highlighted / being watched
+  let submitting = false;
+  let pollHandle = null;
+  let pollErrors = 0;
+  let elapsedTimer = null;
 
   const $ = (id) => document.getElementById(id);
   const label = (s) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
   const fmtDate = (iso) => new Date(iso.replace(/(\.\d{3})\d+/, '$1'))
     .toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const fmtElapsed = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -255,7 +292,26 @@
     heading.focus({ preventScroll: true });
   }
 
+  function stopTracking() {
+    if (pollHandle) clearTimeout(pollHandle);
+    if (elapsedTimer) clearInterval(elapsedTimer);
+    pollHandle = null;
+    elapsedTimer = null;
+    pollErrors = 0;
+  }
+
+  function saveActive(id) {
+    try { localStorage.setItem(ACTIVE_KEY, String(id)); } catch {}
+  }
+  function clearActive() {
+    try { localStorage.removeItem(ACTIVE_KEY); } catch {}
+  }
+  function readActive() {
+    try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
+  }
+
   function fail(message) {
+    stopTracking();
     $('error-msg').textContent = message;
     show('error');
   }
@@ -293,19 +349,10 @@
 
   $('upload-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!selectedFile || busy) return;
+    if (!selectedFile || submitting) return;
     const file = selectedFile;
-    busy = true;
-    document.querySelectorAll('[data-action="new"], .history-item').forEach((b) => (b.disabled = true));
-    $('loading-name').textContent = file.name;
-    show('loading');
-    const started = Date.now();
-    $('elapsed').textContent = '0:00';
-    const timer = setInterval(() => {
-      const s = Math.floor((Date.now() - started) / 1000);
-      $('elapsed').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-    }, 1000);
-
+    submitting = true;
+    $('submit-btn').disabled = true;
     try {
       const body = new FormData();
       body.append('file', file);
@@ -316,38 +363,105 @@
         return fail('Could not reach the ClauseGuard server. Is it still running?');
       }
       const data = await res.json().catch(() => null);
-      if (!res.ok) return fail(typeof data?.detail === 'string' ? data.detail : `Review failed (HTTP ${res.status}).`);
-      renderReport(data);
-      await loadHistory(true);
-    } finally {
-      clearInterval(timer);
-      busy = false;
+      if (!res.ok) return fail(typeof data?.detail === 'string' ? data.detail : `Upload failed (HTTP ${res.status}).`);
       resetUpload();
-      document.querySelectorAll('[data-action="new"], .history-item').forEach((b) => (b.disabled = false));
+      watchReview(data.id, data.document_name, data.created_at, data.status);
+      loadHistory();
+    } finally {
+      submitting = false;
+      $('submit-btn').disabled = false;
     }
   });
 
   document.querySelectorAll('[data-action="new"]').forEach((b) => b.addEventListener('click', () => {
-    if (busy) return;
+    stopTracking();
+    clearActive();
     resetUpload();
     activeId = null;
     markActive();
     show('upload');
   }));
 
-  async function loadHistory(selectNewest = false) {
+  // Begin (or resume, after a refresh) watching one review's progress until it reaches
+  // done/failed. The review itself runs server-side regardless of whether anyone is watching.
+  function watchReview(id, documentName, createdAt, status) {
+    stopTracking();
+    activeId = id;
+    saveActive(id);
+    markActive();
+
+    if (status === 'done' || status === 'failed') {
+      openReview(id); // already finished by the time we looked -- just show the result
+      return;
+    }
+
+    $('loading-name').textContent = documentName;
+    updateStepper(status);
+    show('loading');
+
+    const startMs = new Date(createdAt).getTime();
+    const tick = () => { $('elapsed').textContent = fmtElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000))); };
+    tick();
+    elapsedTimer = setInterval(tick, 1000);
+
+    poll(id);
+  }
+
+  function poll(id) {
+    pollHandle = setTimeout(async () => {
+      let res;
+      try {
+        res = await fetch(`/reviews/${id}`);
+      } catch {
+        pollErrors++;
+        if (pollErrors >= MAX_POLL_ERRORS) return fail('Lost connection to the ClauseGuard server while this review was running.');
+        return poll(id);
+      }
+      if (res.status === 404) return fail('This review no longer exists on the server.');
+      if (!res.ok) {
+        pollErrors++;
+        if (pollErrors >= MAX_POLL_ERRORS) return fail(`Server error while checking progress (HTTP ${res.status}).`);
+        return poll(id);
+      }
+      pollErrors = 0;
+      const record = await res.json();
+
+      if (record.status === 'done') { stopTracking(); clearActive(); renderReport(record); loadHistory(); return; }
+      if (record.status === 'failed') { fail(record.error || 'The review failed for an unknown reason.'); loadHistory(); return; }
+
+      updateStepper(record.status);
+      loadHistory();
+      poll(id);
+    }, POLL_MS);
+  }
+
+  function updateStepper(status) {
+    const currentIndex = STAGES.indexOf(status);
+    $('stepper').querySelectorAll('li').forEach((li) => {
+      const i = STAGES.indexOf(li.dataset.stage);
+      li.classList.toggle('done', i < currentIndex);
+      li.classList.toggle('current', i === currentIndex);
+    });
+    $('loading-detail').textContent = STAGE_DETAIL[status] || '';
+  }
+
+  async function loadHistory() {
     const empty = $('history-empty');
     try {
       const res = await fetch('/reviews');
       if (!res.ok) throw new Error();
       const items = await res.json();
-      if (selectNewest && items.length) activeId = items[0].id;
       const list = $('history-list');
       list.replaceChildren(...items.map((item) => {
         const button = el('button', 'history-item');
         button.type = 'button';
         button.dataset.id = item.id;
+        const status = el('span', `h-status ${item.status === 'failed' ? 'failed' : item.status === 'done' ? '' : 'progress'}`.trim());
+        if (item.status !== 'done') {
+          status.append(el('span', 'h-dot'), document.createTextNode(item.status === 'failed' ? 'Failed' : `${label(item.status)}…`));
+        }
         button.append(el('span', 'h-name', item.document_name), el('span', 'h-date', fmtDate(item.created_at)));
+        if (item.status !== 'done') button.append(status);
         button.addEventListener('click', () => openReview(item.id));
         const li = el('li');
         li.append(button);
@@ -370,20 +484,32 @@
   }
 
   async function openReview(id) {
-    if (busy) return;
     try {
       const res = await fetch(`/reviews/${id}`);
       if (!res.ok) throw new Error(`Couldn't load review #${id}.`);
-      const data = await res.json();
-      activeId = id;
-      markActive();
-      renderReport(data);
+      const record = await res.json();
+      if (record.status === 'done') {
+        stopTracking();
+        clearActive();
+        activeId = id;
+        markActive();
+        renderReport(record);
+      } else if (record.status === 'failed') {
+        stopTracking();
+        clearActive();
+        activeId = id;
+        markActive();
+        fail(record.error || 'The review failed for an unknown reason.');
+      } else {
+        watchReview(id, record.document_name, record.created_at, record.status);
+      }
     } catch (err) {
       fail(err instanceof TypeError ? 'Could not reach the ClauseGuard server.' : err.message);
     }
   }
 
-  function renderReport(r) {
+  function renderReport(record) {
+    const r = record.report;
     const summary = r.executive_summary;
     $('r-name').textContent = r.document_name;
     $('r-date').textContent = `Reviewed ${fmtDate(r.created_at)}`;
@@ -448,11 +574,31 @@
     return card;
   }
 
-  fetch('/api/info')
-    .then((res) => res.json())
-    .then((i) => ($('model').textContent = `${i.provider} · ${i.model}`))
-    .catch(() => ($('model').textContent = 'server offline'));
-  loadHistory();
+  async function init() {
+    fetch('/api/info')
+      .then((res) => res.json())
+      .then((i) => ($('model').textContent = `${i.provider} · ${i.model}`))
+      .catch(() => ($('model').textContent = 'server offline'));
+    await loadHistory();
+
+    const resumeId = readActive();
+    if (resumeId) {
+      try {
+        const res = await fetch(`/reviews/${resumeId}`);
+        if (res.ok) {
+          const record = await res.json();
+          if (record.status === 'done') { clearActive(); activeId = Number(resumeId); markActive(); renderReport(record); }
+          else if (record.status === 'failed') { clearActive(); activeId = Number(resumeId); markActive(); fail(record.error || 'The review failed for an unknown reason.'); }
+          else watchReview(record.id, record.document_name, record.created_at, record.status);
+        } else {
+          clearActive();
+        }
+      } catch {
+        // Offline at load time -- leave the key in place and let the user retry manually.
+      }
+    }
+  }
+  init();
 </script>
 </body>
 </html>

@@ -6,6 +6,7 @@ extract --(clauses found?)--> analyze --> summarize --> END
 See FLOW.md for the full state-shape and routing diagram.
 """
 
+from collections.abc import Callable
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -13,8 +14,12 @@ from langgraph.graph import END, StateGraph
 from clauseguard.agents.extractor import extract_clauses
 from clauseguard.agents.risk_analyzer import analyze_risk
 from clauseguard.agents.summarizer import summarize
-from clauseguard.models.schemas import Clause, ExecutiveSummary, RiskFinding
+from clauseguard.models.schemas import Clause, ExecutiveSummary, ReviewStatus, RiskFinding
 from clauseguard.rules.loader import load_rules
+
+# What node just finishing implies about the *next* stage -- summarize always runs last
+# regardless of which path got there, so both branches out of "extract" land on it.
+_NEXT_STAGE = {"extract": ReviewStatus.ANALYZING, "analyze": ReviewStatus.SUMMARIZING}
 
 
 class ReviewState(TypedDict):
@@ -60,12 +65,23 @@ def build_graph():
     return graph.compile()
 
 
-def run_review(document_text: str) -> ReviewState:
+def run_review(document_text: str, on_stage: Callable[[ReviewStatus], None] | None = None) -> ReviewState:
+    """Runs the pipeline to completion. If on_stage is given, it's called once
+    per stage transition (extracting -> analyzing/summarizing -> ...) as each
+    node finishes, so a caller can persist progress a client can poll for."""
     app = build_graph()
-    initial_state: ReviewState = {
-        "document_text": document_text,
-        "clauses": [],
-        "findings": [],
-        "summary": None,
-    }
-    return app.invoke(initial_state)
+    state: ReviewState = {"document_text": document_text, "clauses": [], "findings": [], "summary": None}
+    if on_stage:
+        on_stage(ReviewStatus.EXTRACTING)
+
+    for step in app.stream(state):
+        node_name, update = next(iter(step.items()))
+        state.update(update)
+        if on_stage and node_name in _NEXT_STAGE:
+            # extract's next stage depends on whether any clauses were found (route_after_extract).
+            if node_name == "extract" and not state["clauses"]:
+                on_stage(ReviewStatus.SUMMARIZING)
+            else:
+                on_stage(_NEXT_STAGE[node_name])
+
+    return state

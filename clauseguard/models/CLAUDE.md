@@ -16,8 +16,16 @@ next agent.
   finding back to both the clause (`clause_id`) and the rule it violated.
 - `ExecutiveSummary` -- Summarizer's output. `RiskVerdict` is the top-line
   low/moderate/high call.
-- `ReviewReport` -- what `POST /review` returns and what gets persisted:
-  clauses + findings + executive_summary + metadata, all in one object.
+- `ReviewReport` -- the finished result: clauses + findings +
+  executive_summary + metadata, all in one object. Only exists once a
+  review reaches `status=done`.
+- `ReviewStatus` -- the job lifecycle a review moves through:
+  `extracting -> analyzing -> summarizing -> done`, or `failed` from any
+  stage. Mirrors the stage names `agents/graph.py`'s `on_stage` callback
+  emits -- see [agents/CLAUDE.md](../agents/CLAUDE.md) and FLOW.md.
+- `ReviewRecord` -- what `POST /review` (immediately) and `GET
+  /reviews/{id}` (on every poll) return: `id`, `status`, and either
+  `report` (once done) or `error` (once failed) -- never both.
 
 Adding a new clause type or a new finding field means editing this file
 first -- everything downstream (rules JSON, prompts, DB storage) follows

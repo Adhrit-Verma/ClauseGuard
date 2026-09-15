@@ -1,20 +1,27 @@
 # clauseguard/ (package root)
 
 - `main.py` -- FastAPI app. `GET /` serves `static/index.html`;
-  `GET /api/info` reports the active provider/model. `POST /review` accepts
-  a PDF upload, extracts text with pdfplumber, runs the LangGraph pipeline
-  (`agents/graph.py`), persists the report (`storage/db.py`), returns it.
-  Failures map to status codes the UI shows verbatim: 400 not a readable
-  PDF, 422 no text (scanned), 503 LLM unreachable, 504 model timed out
-  (`OLLAMA_TIMEOUT`, default 600s), 502 malformed model output.
-  The pipeline runs via `asyncio.to_thread` -- calling it directly inside
-  the async endpoint blocks the event loop for the whole review (minutes)
-  and freezes every other request. `GET /reviews` and `GET /reviews/{id}`
-  read audit history back out.
-- `static/index.html` -- the whole web UI: upload, loading state, report
-  (verdict, findings by severity, clauses), and a past-reviews sidebar.
-  Vanilla JS, no build step. Renders all model output via `textContent`
-  since it derives from an untrusted PDF -- keep it that way (no `innerHTML`).
+  `GET /api/info` reports the active provider/model. `POST /review`
+  extracts PDF text (400/422 on failure), inserts a `status='extracting'`
+  row via `storage/db.py`, schedules the pipeline as a `BackgroundTask`,
+  and returns 202 with that row's id **immediately** -- it does not wait
+  for the review to finish. The pipeline (`_process_review`) then runs
+  off-request: on success it calls `db.complete_review`, on an LLM
+  failure (`OSError`/`ValueError` from `run_review`) it calls
+  `db.fail_review` with a readable message. `GET /reviews` lists every
+  review with its current status; `GET /reviews/{id}` is what a client
+  polls -- see FLOW.md for the full id-based job lifecycle and why it
+  survives a browser refresh.
+- `static/index.html` -- the whole web UI: upload, a step-wise progress
+  tracker (extract/analyze/summarize) driven by polling `GET
+  /reviews/{id}`, the report (verdict, findings by severity, clauses), and
+  a past-reviews sidebar with live status badges. Vanilla JS, no build
+  step. Tracks only *which* review it's watching in
+  `localStorage['clauseguard:activeReviewId']` -- all progress state is
+  re-fetched from the server, never cached client-side, which is what
+  makes a refresh resume correctly instead of losing the review. Renders
+  all model output via `textContent` since it derives from an untrusted
+  PDF -- keep it that way (no `innerHTML`).
 - `llm.py` -- the only file that talks to an LLM backend. Two providers,
   switched by `CLAUSEGUARD_LLM_PROVIDER` (`anthropic` or `ollama`, see the
   module docstring for defaults). Exposes `call_llm(system, user) -> str`

@@ -39,15 +39,20 @@ Pick an LLM backend (see [clauseguard/llm.py](clauseguard/llm.py)):
   ```
 - **Anthropic** (paid, better quality) — put `ANTHROPIC_API_KEY` in `.env`.
 
-Run the server and open the web UI:
+Then start everything with one command:
 
 ```bash
-uvicorn clauseguard.main:app --reload
+python scripts/start.py
 ```
 
-Visit **http://127.0.0.1:8000**, drop in `sample_docs/sample_nda.pdf`, and
-watch the pipeline extract clauses, flag risks, and write a summary.
-API docs are at `/docs`.
+This checks Ollama is running (starting `ollama serve` and pulling the
+model if needed — skipped entirely if you're using Anthropic), launches
+the FastAPI server, and opens **http://127.0.0.1:8000** in your browser.
+Drop in `sample_docs/sample_nda.pdf` and watch the pipeline extract
+clauses, flag risks, and write a summary. API docs are at `/docs`.
+
+(`uvicorn clauseguard.main:app --reload` also works if you'd rather run
+the server directly — just make sure Ollama is already up first.)
 
 Or skip the server entirely:
 
@@ -76,7 +81,8 @@ clauseguard/
   main.py       FastAPI app (web UI, POST /review, GET /reviews)
 tests/          pytest, offline
 sample_docs/    a synthetic NDA (.txt and .pdf) for local testing
-scripts/demo.py runs the pipeline standalone, no server
+scripts/start.py   one-command launch: Ollama + server + browser
+scripts/demo.py    runs the pipeline standalone, no server
 ```
 
 Every folder has its own `CLAUDE.md` with more detail. Start at the root

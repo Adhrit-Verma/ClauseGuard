@@ -75,3 +75,25 @@ class ReviewReport(BaseModel):
     clauses: list[Clause]
     findings: list[RiskFinding]
     executive_summary: ExecutiveSummary
+
+
+class ReviewStatus(str, Enum):
+    """Mirrors the pipeline stages in agents/graph.py, plus the two terminal states."""
+
+    EXTRACTING = "extracting"
+    ANALYZING = "analyzing"
+    SUMMARIZING = "summarizing"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class ReviewRecord(BaseModel):
+    """What GET /reviews/{id} returns -- a review at any point in its lifecycle.
+    `report` is populated once `status` reaches DONE; `error` once it reaches FAILED."""
+
+    id: int
+    document_name: str
+    created_at: datetime
+    status: ReviewStatus
+    error: str | None = None
+    report: ReviewReport | None = None

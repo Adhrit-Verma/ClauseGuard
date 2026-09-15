@@ -17,8 +17,15 @@ output). None of them touch the Anthropic SDK directly -- they call
   summary).
 - `graph.py` -- LangGraph `StateGraph` wiring: `extract -> [analyze?] ->
   summarize -> END`. `ReviewState` is the shared TypedDict all three nodes
-  read/write. `run_review(document_text)` is the single entrypoint
-  `main.py` and `scripts/demo.py` both call.
+  read/write. `run_review(document_text, on_stage=None)` is the single
+  entrypoint `main.py` and `scripts/demo.py` both call. `on_stage`, if
+  given, is called with a `ReviewStatus` each time the *next* stage is
+  known -- driven by iterating `app.stream(state)` instead of a single
+  `app.invoke(state)`, so a caller (`main.py`) can persist progress
+  between LLM calls, not just once at the end. `route_after_extract`'s
+  zero-clauses branch is handled here too: if `extract` finds nothing,
+  `on_stage` is called with `SUMMARIZING` directly, matching the routing
+  below -- see FLOW.md for the full stage-transition diagram.
 
 ## Why a graph and not three function calls in a row
 

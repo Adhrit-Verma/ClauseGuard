@@ -52,6 +52,34 @@ answer to "how do you orchestrate more than one LLM call reliably," and
 kind of routing that gets painful to hand-roll once there's more than one
 of it.
 
+## Progress tracking: a status column, polled, not a live connection
+
+A review takes minutes on a local model. Early on, `POST /review` ran the
+whole pipeline in the request and returned the finished report -- which
+meant a page refresh mid-review genuinely lost the review: the browser's
+only handle on it was the in-flight HTTP request, and reloading killed
+that. The fix wasn't "make it faster," it was to stop treating the
+client's connection as where progress lives at all.
+
+Now `POST /review` inserts a row (`status='extracting'`) and returns its
+id in well under a second; the pipeline runs afterward as a background
+task and writes its own progress into that same row as it goes
+(`extracting -> analyzing -> summarizing -> done`, or `failed`). The
+client's only job is to remember *which id* it's watching
+(`localStorage`) and ask the server for that row's current state. A
+refresh, a closed tab, a different browser entirely -- all of them
+recover by asking the same question: "what's the status of review N?"
+
+The alternative was a persistent connection (WebSocket or SSE) pushing
+progress to the client live. That's smoother (no poll delay, no wasted
+requests) but doesn't fix the actual bug on its own -- the *server* still
+needs to know a review's status independent of any one connection, or a
+reconnecting client has nothing to catch up on. Once that server-side
+state exists, polling it every few seconds is the smaller amount of
+machinery for one browser tab at a time; a persistent-connection layer
+would be worth it if reviews needed to push updates to multiple viewers
+at once, which nothing here does yet.
+
 ## Structured, validated output at every stage
 
 Every agent returns JSON, and every JSON response is validated against a
@@ -75,11 +103,13 @@ SLA, or an HR policy without touching agent code.
 ## Stack
 
 - **Python 3.12+, FastAPI** -- `POST /review` (upload PDF, get a
-  `ReviewReport`), `GET /reviews`, `GET /reviews/{id}`.
+  `ReviewRecord` id immediately; the report lands on it asynchronously),
+  `GET /reviews` (list with status), `GET /reviews/{id}` (poll one).
 - **LangGraph** -- orchestrates the three agents as a graph (see above).
-- **Anthropic API** (`clauseguard/llm.py`) -- the reasoning engine inside
-  each agent. One thin wrapper function, `call_llm`, is the only place the
-  SDK is touched -- this is also the seam every test mocks.
+- **Ollama or Anthropic API** (`clauseguard/llm.py`) -- the reasoning
+  engine inside each agent. One thin wrapper function, `call_llm`, is the
+  only place either SDK/API is touched -- this is also the seam every
+  test mocks.
 - **pdfplumber** -- PDF text extraction.
 - **Pydantic** -- schema validation at every agent hand-off.
 - **SQLite** (`clauseguard/storage/db.py`) -- audit history, one table,
@@ -111,3 +141,12 @@ SLA, or an HR policy without touching agent code.
   garbage findings -- but a wrong rule file still means real risks go
   unchecked. This is a configuration problem, not something the code can
   detect on its own.
+- **Server restarts mid-review.** A `BackgroundTask` is in-process: if
+  uvicorn is killed while one is running, that review's row is stuck at
+  whatever stage it last reached -- `status` never reaches `done` or
+  `failed`, and a client polling it waits forever. Not handled today:
+  there's no timeout-based "reap stale in-progress reviews on startup."
+  Acceptable for a single local instance; a multi-worker or multi-process
+  deployment would need a real job queue (e.g. Celery/RQ) instead of an
+  in-process background task, since a review started on one worker isn't
+  visible to another anyway.
