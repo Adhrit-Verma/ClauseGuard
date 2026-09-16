@@ -21,6 +21,9 @@ from clauseguard.storage import db
 app = FastAPI(title="ClauseGuard", description="Multi-agent contract & policy review pipeline")
 
 DB_PATH = os.environ.get("CLAUSEGUARD_DB", db.DEFAULT_DB_PATH)
+# Failed reviews are swept when the next review starts, once they're this old (0 disables the sweep).
+# The delay keeps a fresh failure visible in the UI -- its error message is the only record of what broke.
+FAILED_TTL_SECONDS = float(os.environ.get("CLAUSEGUARD_FAILED_TTL", "3600"))
 INDEX_HTML = Path(__file__).parent / "static" / "index.html"
 
 
@@ -88,6 +91,9 @@ async def review_document(background_tasks: BackgroundTasks, file: UploadFile = 
         raise HTTPException(
             status_code=422, detail="No text found in this PDF. Scanned documents aren't supported yet."
         )
+
+    if FAILED_TTL_SECONDS > 0:
+        db.delete_failed_reviews(FAILED_TTL_SECONDS, path=DB_PATH)
 
     created_at = datetime.now(timezone.utc)
     review_id = db.create_review(file.filename, created_at.isoformat(), path=DB_PATH)

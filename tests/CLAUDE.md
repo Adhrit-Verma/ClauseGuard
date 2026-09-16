@@ -18,8 +18,9 @@ pytest, every LLM call mocked via `monkeypatch.setattr(<agent module>,
 - `test_llm.py` -- the markdown-fence-stripping JSON parser, and the
   context-overflow guard (refuses a too-long prompt before calling Ollama).
 - `test_db.py` -- the review status lifecycle (extracting -> ... -> done
-  or failed) directly against `storage/db.py`, plus the schema migration
-  from a hand-built legacy table with no status/error columns.
+  or failed) directly against `storage/db.py`, the schema migration from a
+  hand-built legacy table with no status/error columns, and the failed-row
+  sweep (only failures, only past the grace period).
 - `test_api.py` -- FastAPI layer via `TestClient`: UI served, `/api/info`,
   `POST /review` returns 202 immediately in `extracting` status (patches
   `main.run_review`), and the background task's outcome (done/failed +

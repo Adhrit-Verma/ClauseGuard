@@ -24,6 +24,11 @@ other memory of the review it was watching -- see FLOW.md.
 - `list_reviews(path) -> list[dict]` -- `id, document_name, created_at,
   status` for every review, in-progress ones included (fetch one by id
   for its full report or error).
+- `delete_failed_reviews(older_than_seconds, path) -> int` -- housekeeping
+  for failed rows. `main.py` calls it when a new review starts, with
+  `CLAUSEGUARD_FAILED_TTL` (default 3600s, 0 disables). The grace period is
+  deliberate: a failure's error message is the only record of what went
+  wrong, so it has to outlive the moment someone is looking at it.
 
 DB file location: `CLAUSEGUARD_DB` env var, defaults to `clauseguard.db`
 in the working directory. Schema migration is a plain idempotent `ALTER

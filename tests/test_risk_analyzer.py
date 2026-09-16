@@ -32,6 +32,35 @@ def _never_called(*args, **kwargs):
     raise AssertionError("call_llm should not run when there is nothing to check")
 
 
+def test_clause_no_rule_retrieved_still_gets_checked_against_its_closest_rules(monkeypatch):
+    rule = Rule(
+        id="perpetual_or_overbroad_confidentiality",
+        name="Perpetual confidentiality",
+        applies_to=ClauseType.CONFIDENTIALITY,
+        description="Flag confidentiality with no end date.",
+        severity=Severity.MEDIUM,
+        keywords=["confidential"],
+    )
+    # None carries the rule's type, and c4 is the weakest keyword match, so the rule's own top-3 skips it.
+    clauses = [
+        Clause(id="c1", type=ClauseType.OTHER, text="Confidential confidential information stays confidential."),
+        Clause(id="c2", type=ClauseType.OTHER, text="Confidential confidential data is protected."),
+        Clause(id="c3", type=ClauseType.OTHER, text="Confidential confidential notes are kept."),
+        Clause(id="c4", type=ClauseType.OTHER, text="Confidential material is held for ten years with no end date."),
+    ]
+    seen = {}
+
+    def fake(system, user):
+        seen["prompt"] = user
+        return '{"checks": [[4, true, "no end date"]]}'
+
+    monkeypatch.setattr(risk_analyzer, "call_llm", fake)
+    result = risk_analyzer.analyze_risk(clauses, [rule])
+
+    assert "4. Rule:" in seen["prompt"] and "ten years with no end date" in seen["prompt"]
+    assert [(f.clause_id, f.rule_id) for f in result.findings] == [("c4", "perpetual_or_overbroad_confidentiality")]
+
+
 def test_analyze_risk_no_clauses_skips_llm_call(monkeypatch, sample_rules):
     monkeypatch.setattr(risk_analyzer, "call_llm", _never_called)
     assert risk_analyzer.analyze_risk([], sample_rules).findings == []

@@ -144,6 +144,25 @@ def test_review_reports_stage_transitions(monkeypatch):
     assert client.get(f"/reviews/{review_id}").json()["status"] == "done"
 
 
+def test_starting_a_review_sweeps_old_failures_but_keeps_fresh_ones(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from clauseguard.storage import db
+
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    stale = db.create_review("old.pdf", old, path=main.DB_PATH)
+    db.fail_review(stale, "boom", path=main.DB_PATH)
+    recent = db.create_review("recent.pdf", datetime.now(timezone.utc).isoformat(), path=main.DB_PATH)
+    db.fail_review(recent, "boom", path=main.DB_PATH)
+
+    monkeypatch.setattr(main, "run_review", _succeeds_with())
+    new_id = _post("nda.pdf", SAMPLE_PDF).json()["id"]
+
+    ids = {r["id"] for r in client.get("/reviews").json()}
+    assert stale not in ids  # swept
+    assert {recent, new_id} <= ids  # fresh failure still readable in the UI
+
+
 def test_unknown_review_id_returns_404():
     assert client.get("/reviews/999999").status_code == 404
 

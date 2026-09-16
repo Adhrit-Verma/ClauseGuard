@@ -4,6 +4,7 @@ tracking), not just once a report is ready -- this is what makes GET
 so tests never touch the real clauseguard.db."""
 
 import sqlite3
+from datetime import datetime, timedelta, timezone
 
 from clauseguard.models.schemas import Clause, ExecutiveSummary, ReviewReport, ReviewStatus
 from clauseguard.storage import db
@@ -70,6 +71,25 @@ def test_list_reviews_includes_status_for_in_progress_and_done(tmp_path):
     items = {item["id"]: item["status"] for item in db.list_reviews(path=path)}
     assert items[done_id] == "done"
     assert items[pending_id] == "extracting"
+
+
+def test_delete_failed_reviews_only_removes_old_failures(tmp_path):
+    path = tmp_path / "test.db"
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    fresh = datetime.now(timezone.utc).isoformat()
+
+    old_failed = db.create_review("old.pdf", old, path=path)
+    db.fail_review(old_failed, "boom", path=path)
+    fresh_failed = db.create_review("fresh.pdf", fresh, path=path)
+    db.fail_review(fresh_failed, "boom", path=path)
+    old_done = db.create_review("done.pdf", old, path=path)
+    db.complete_review(old_done, REPORT, path=path)
+    running = db.create_review("running.pdf", old, path=path)
+
+    removed = db.delete_failed_reviews(older_than_seconds=3600, path=path)
+
+    assert removed == 1
+    assert {r["id"] for r in db.list_reviews(path=path)} == {fresh_failed, old_done, running}
 
 
 def test_get_review_returns_none_for_unknown_id(tmp_path):

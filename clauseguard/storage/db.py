@@ -8,6 +8,7 @@ before landing on done or failed -- see clauseguard/CLAUDE.md.
 """
 
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from clauseguard.models.schemas import ReviewReport, ReviewStatus
@@ -112,6 +113,20 @@ def get_review(review_id: int, path: str | Path = DEFAULT_DB_PATH) -> dict | Non
             (review_id,),
         ).fetchone()
         return _row_to_record(row) if row else None
+    finally:
+        conn.close()
+
+
+def delete_failed_reviews(older_than_seconds: float, path: str | Path = DEFAULT_DB_PATH) -> int:
+    """Drops failed reviews past their grace period, returning how many went. The delay is the point:
+    a failure has to stay readable in the UI long enough for someone to see why it failed."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)).isoformat()
+    conn = _connect(path)
+    try:
+        # created_at is always an ISO-8601 UTC string written by create_review, so it sorts as text.
+        cur = conn.execute("DELETE FROM reviews WHERE status = 'failed' AND created_at < ?", (cutoff,))
+        conn.commit()
+        return cur.rowcount
     finally:
         conn.close()
 

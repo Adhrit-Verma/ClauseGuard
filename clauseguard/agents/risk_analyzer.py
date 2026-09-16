@@ -26,17 +26,30 @@ MAX_CHECKS_PER_CALL = 40
 # ponytail: keyword retrieval only -- a clause that both paraphrases a rule with no shared words and carries
 # the wrong type label is still missed. Embedding retrieval is the upgrade if that shows up in practice.
 TOP_K_PER_RULE = 3
+# Retrieval runs both ways: without this, a clause no rule ranked highly and whose type matches nothing
+# is checked against nothing at all, and silently gets a clean bill of health.
+RULES_PER_UNMATCHED_CLAUSE = 2
 
 
 def _candidate_pairs(clauses: list[Clause], rules: list[Rule]) -> list[tuple[Clause, Rule]]:
     documents = [tokenize(clause.text) for clause in clauses]
+    rule_queries = [tokenize(" ".join(rule.keywords)) if rule.keywords else tokenize(rule.name) for rule in rules]
+
     pairs: set[tuple[int, int]] = set()
     for r, rule in enumerate(rules):
         pairs.update((c, r) for c, clause in enumerate(clauses) if clause.type == rule.applies_to)
-        query = tokenize(" ".join(rule.keywords)) if rule.keywords else tokenize(rule.name)
-        scores = bm25_scores(query, documents)
+        scores = bm25_scores(rule_queries[r], documents)
         ranked = [c for c in sorted(range(len(clauses)), key=lambda i: -scores[i]) if scores[c] > 0]
         pairs.update((c, r) for c in ranked[:TOP_K_PER_RULE])
+
+    matched = {c for c, _ in pairs}
+    for c, document in enumerate(documents):
+        if c in matched:
+            continue
+        scores = bm25_scores(document, rule_queries)  # same index, rules as the documents this time
+        ranked = [r for r in sorted(range(len(rules)), key=lambda i: -scores[i]) if scores[r] > 0]
+        pairs.update((c, r) for r in ranked[:RULES_PER_UNMATCHED_CLAUSE])
+
     return [(clauses[c], rules[r]) for c, r in sorted(pairs)]
 
 

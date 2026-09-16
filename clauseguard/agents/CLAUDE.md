@@ -28,10 +28,13 @@ seconds but lost findings was rejected (see git history).
   keep their global line numbers, so a clause can run across a cut, and a
   start number outside the chunk it came from is ignored.
 - `risk_analyzer.py` -- `analyze_risk(clauses, rules) -> RiskAnalysisResult`.
-  **Retrieve:** candidates for each rule are the clauses labeled with its
-  type plus the `TOP_K_PER_RULE` clauses a BM25 keyword index
-  (`clauseguard/retrieval.py`) ranks highest for the rule's `keywords`, so a
-  mislabeled clause is still checked. **Rerank/verify:** those (clause, rule)
+  **Retrieve (both directions):** candidates for each rule are the clauses
+  labeled with its type plus the `TOP_K_PER_RULE` clauses a BM25 keyword
+  index (`clauseguard/retrieval.py`) ranks highest for the rule's
+  `keywords`, so a mislabeled clause is still checked. Then any clause still
+  without a single candidate rule pulls in its own `RULES_PER_UNMATCHED_CLAUSE`
+  closest rules (same index, rules as the documents) -- otherwise that clause
+  is checked against nothing and silently comes back clean. **Rerank/verify:** those (clause, rule)
   pairs go out as a numbered checklist; the model must answer each row
   `[check_number, true/false, <=12-word reason]`. Skips the LLM call
   entirely if there are no pairs -- see the conditional routing note
