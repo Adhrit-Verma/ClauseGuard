@@ -24,6 +24,10 @@ other memory of the review it was watching -- see FLOW.md.
 - `list_reviews(path) -> list[dict]` -- `id, document_name, created_at,
   status` for every review, in-progress ones included (fetch one by id
   for its full report or error).
+- `save_metrics(review_id, metrics, path)` -- token/latency/cost totals for
+  one review (`llm.summarize_calls`), stored as JSON in `metrics_json` and
+  returned on the record. Written for failed reviews too: what a review
+  spent before dying is part of what you want to see.
 - `delete_failed_reviews(older_than_seconds, path) -> int` -- housekeeping
   for failed rows. `main.py` calls it when a new review starts, with
   `CLAUSEGUARD_FAILED_TTL` (default 3600s, 0 disables). The grace period is

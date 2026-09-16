@@ -73,6 +73,16 @@ def test_list_reviews_includes_status_for_in_progress_and_done(tmp_path):
     assert items[pending_id] == "extracting"
 
 
+def test_save_metrics_round_trips(tmp_path):
+    path = tmp_path / "test.db"
+    review_id = db.create_review("nda.pdf", "2026-01-01T00:00:00+00:00", path=path)
+
+    db.save_metrics(review_id, {"calls": 3, "prompt_tokens": 100, "output_tokens": 20,
+                                "model_seconds": 1.5, "cost_usd": 0}, path=path)
+
+    assert db.get_review(review_id, path=path)["metrics"]["calls"] == 3
+
+
 def test_delete_failed_reviews_only_removes_old_failures(tmp_path):
     path = tmp_path / "test.db"
     old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()

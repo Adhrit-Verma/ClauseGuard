@@ -7,6 +7,7 @@ same stages as agents/graph.py (extracting -> analyzing -> summarizing)
 before landing on done or failed -- see clauseguard/CLAUDE.md.
 """
 
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -25,11 +26,12 @@ def _connect(path: str | Path) -> sqlite3.Connection:
             created_at TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'extracting',
             error TEXT,
-            report_json TEXT
+            report_json TEXT,
+            metrics_json TEXT
         )"""
     )
     migrated = False
-    for column, ddl in (("status", "TEXT NOT NULL DEFAULT 'extracting'"), ("error", "TEXT")):
+    for column, ddl in (("status", "TEXT NOT NULL DEFAULT 'extracting'"), ("error", "TEXT"), ("metrics_json", "TEXT")):
         try:
             conn.execute(f"ALTER TABLE reviews ADD COLUMN {column} {ddl}")
             migrated = True
@@ -93,8 +95,18 @@ def fail_review(review_id: int, error: str, path: str | Path = DEFAULT_DB_PATH) 
         conn.close()
 
 
+def save_metrics(review_id: int, metrics: dict, path: str | Path = DEFAULT_DB_PATH) -> None:
+    """Token/latency/cost totals for one review, recorded whether it succeeded or failed."""
+    conn = _connect(path)
+    try:
+        conn.execute("UPDATE reviews SET metrics_json = ? WHERE id = ?", (json.dumps(metrics), review_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _row_to_record(row: tuple) -> dict:
-    review_id, document_name, created_at, status, error, report_json = row
+    review_id, document_name, created_at, status, error, report_json, metrics_json = row
     return {
         "id": review_id,
         "document_name": document_name,
@@ -102,6 +114,7 @@ def _row_to_record(row: tuple) -> dict:
         "status": status,
         "error": error,
         "report": ReviewReport.model_validate_json(report_json) if report_json else None,
+        "metrics": json.loads(metrics_json) if metrics_json else None,
     }
 
 
@@ -109,7 +122,7 @@ def get_review(review_id: int, path: str | Path = DEFAULT_DB_PATH) -> dict | Non
     conn = _connect(path)
     try:
         row = conn.execute(
-            "SELECT id, document_name, created_at, status, error, report_json FROM reviews WHERE id = ?",
+            "SELECT id, document_name, created_at, status, error, report_json, metrics_json FROM reviews WHERE id = ?",
             (review_id,),
         ).fetchone()
         return _row_to_record(row) if row else None

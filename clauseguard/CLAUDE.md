@@ -34,12 +34,28 @@
   characters fit one call. Agents split long documents to it; `_call_ollama`
   refuses anything still over it, since Ollama would silently truncate. Every agent imports `call_llm` from here and every
   agent test monkeypatches it there -- agent code never knows which
-  provider is active.
+  provider is active. Also owns metrics: `collect_calls()` (a thread-local
+  context manager) records model, tokens and seconds for every call made
+  inside it, and `summarize_calls()` totals them, pricing tokens with
+  `CLAUSEGUARD_*_COST_PER_MTOK` (0 for local models). `main._process_review`
+  wraps a whole review in one collector.
 
-- `retrieval.py` -- the keyword index: `tokenize(text)` and
-  `bm25_scores(query, documents)`, plain Python. Built per document over its
-  clauses (nothing persisted); the Risk Analyzer uses it to find candidate
-  clauses for each rule independent of the Extractor's type labels.
+- `guardrails.py` -- the document is untrusted input that lands in prompts.
+  `find_injection(text)` flags lines that read like instructions to the
+  model (they go on the report as `warnings`; the review still runs, since
+  refusing would be trivial to weaponize), and the agents' prompts say the
+  document is data, never instructions. `redact_pii(text)` replaces obvious
+  identifiers before a prompt leaves the machine -- off for local Ollama,
+  on for a remote provider (`CLAUSEGUARD_REDACT_PII=auto|always|never`,
+  applied in `llm.call_llm`).
+- `retrieval.py` -- picks the (clause, rule) pairs the Risk Analyzer checks,
+  independent of the Extractor's type labels. `candidate_pairs()` combines
+  three signals: the type label, BM25 keywords (`bm25_scores`), and cosine
+  similarity over embeddings (`cosine_scores`) when an embedding model is
+  installed, merged with `rrf_fuse()` (reciprocal rank fusion). Embeddings
+  are optional -- `llm.embed()` returns None without them and retrieval is
+  keyword-only. Each pair carries how it was found (`type`/`keyword`/
+  `hybrid`), which ends up on the finding as `retrieved_by`.
 
 Subpackages: [models/](models/CLAUDE.md), [agents/](agents/CLAUDE.md),
 [rules/](rules/CLAUDE.md), [storage/](storage/CLAUDE.md).

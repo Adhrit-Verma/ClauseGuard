@@ -17,13 +17,16 @@ clauseguard/          the package -- see clauseguard/CLAUDE.md
   rules/                 the configurable rule set the Risk Analyzer checks against
   storage/                SQLite audit history
   llm.py                   LLM wrapper, Ollama or Anthropic (the one place tests mock)
-  retrieval.py              BM25 keyword index: finds candidate clauses per rule
+  retrieval.py              hybrid retrieval (BM25 + optional embeddings, RRF-fused):
+                              picks which clause/rule pairs get checked
   main.py                   FastAPI app: POST /review returns immediately (202),
                               the pipeline runs as a background task, progress is
                               polled via GET /reviews/{id} -- see FLOW.md
   static/index.html          the web UI -- one file, vanilla JS, no build step,
                               resumes an in-progress review after a page refresh
+  guardrails.py             prompt-injection flagging + PII redaction
 tests/                 pytest, all LLM calls mocked -- no API key needed to run these
+evals/                 accuracy measurement against the real model -- see evals/CLAUDE.md
 sample_docs/           synthetic NDA and offer letter for local testing
 scripts/start.py       one-command launch: checks/starts Ollama, pulls the
                          model if missing, starts the server, opens the browser
@@ -49,6 +52,10 @@ Two LLM providers, picked via `CLAUSEGUARD_LLM_PROVIDER` (see
 - **anthropic** (default if `ANTHROPIC_API_KEY` is set) -- paid, needs a
   key from console.anthropic.com in `.env`. Higher-quality extraction and
   risk analysis than a small local model.
+
+Optional: `ollama pull nomic-embed-text` (`CLAUSEGUARD_EMBED_MODEL`) turns
+retrieval from keyword-only into hybrid keyword+semantic. Reviews work
+without it; `GET /api/info` reports which mode is active.
 
 ## Running
 

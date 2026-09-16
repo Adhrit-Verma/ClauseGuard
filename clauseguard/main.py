@@ -13,7 +13,7 @@ import pdfplumber
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from clauseguard import llm
+from clauseguard import guardrails, llm
 from clauseguard.agents.graph import run_review
 from clauseguard.models.schemas import ReviewRecord, ReviewReport, ReviewStatus
 from clauseguard.storage import db
@@ -36,6 +36,14 @@ def _process_review(review_id: int, document_name: str, text: str) -> None:
     """Runs off the request entirely -- a FastAPI BackgroundTask keeps running
     to completion even if the client disconnects (e.g. the browser tab is
     refreshed or closed), which is what makes polling by id reliable."""
+    with llm.collect_calls() as calls:
+        try:
+            _run_pipeline(review_id, document_name, text)
+        finally:  # metrics are recorded even for a failed review -- what it spent before dying matters
+            db.save_metrics(review_id, llm.summarize_calls(calls), path=DB_PATH)
+
+
+def _run_pipeline(review_id: int, document_name: str, text: str) -> None:
     try:
         state = run_review(text, on_stage=lambda stage: db.update_status(review_id, stage, path=DB_PATH))
     except OSError as exc:  # TimeoutError, or URLError (possibly wrapping one) from Ollama
@@ -57,12 +65,18 @@ def _process_review(review_id: int, document_name: str, text: str) -> None:
         db.fail_review(review_id, f"Review failed: {exc}", path=DB_PATH)
         return
 
+    injected = guardrails.find_injection(text)
     report = ReviewReport(
         document_name=document_name,
         created_at=datetime.now(timezone.utc),
         clauses=state["clauses"],
         findings=state["findings"],
         executive_summary=state["summary"],
+        warnings=(
+            [f"This document contains text that reads like instructions to the AI, e.g. {snippet!r}. "
+             "Findings from it should be checked by hand." for snippet in injected[:1]]
+            + [f"Also: {snippet!r}" for snippet in injected[1:]]
+        ),
     )
     db.complete_review(review_id, report, path=DB_PATH)
 
@@ -74,7 +88,12 @@ def index() -> FileResponse:
 
 @app.get("/api/info")
 def info() -> dict:
-    return {"provider": llm.PROVIDER, "model": llm.MODEL}
+    hybrid = llm.embeddings_ready()
+    return {
+        "provider": llm.PROVIDER,
+        "model": llm.MODEL,
+        "retrieval": f"hybrid (keywords + {llm.EMBED_MODEL})" if hybrid else "keywords only",
+    }
 
 
 @app.post("/review", response_model=ReviewRecord, status_code=202)

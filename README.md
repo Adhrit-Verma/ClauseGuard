@@ -39,6 +39,12 @@ Pick an LLM backend (see [clauseguard/llm.py](clauseguard/llm.py)):
   ```
 - **Anthropic** (paid, better quality) — put `ANTHROPIC_API_KEY` in `.env`.
 
+Optional, for semantic (hybrid) retrieval instead of keyword-only:
+
+```bash
+ollama pull nomic-embed-text
+```
+
 Then start everything with one command:
 
 ```bash
@@ -66,7 +72,18 @@ python scripts/demo.py
 pytest
 ```
 
-23 tests, every LLM call mocked — no API key or running model needed.
+Every LLM call is mocked — no API key or running model needed.
+
+## Evals
+
+Measure the model's accuracy (not just the code) on labeled sample documents:
+
+```bash
+python evals/run_evals.py
+```
+
+Reports recall, precision, clause counts, latency, tokens and cost per
+case. See [evals/CLAUDE.md](evals/CLAUDE.md).
 
 ## Project layout
 

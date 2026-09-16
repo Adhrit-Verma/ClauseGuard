@@ -120,6 +120,9 @@
   .tone-high { --tone: var(--high); --tone-bg: var(--high-bg); }
   .tone-medium { --tone: var(--medium); --tone-bg: var(--medium-bg); }
   .tone-low { --tone: var(--low); --tone-bg: var(--low-bg); }
+  .warn { padding: 14px 18px; margin-bottom: 10px; border-left: 4px solid var(--medium); background: var(--medium-bg); }
+  .warn p { margin: 0 0 6px; }
+  .warn p:last-child { margin-bottom: 0; }
   .verdict { padding: 22px 24px; border-left: 5px solid var(--tone); }
   .verdict-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--tone); background: var(--tone-bg); padding: 4px 12px 4px 10px; border-radius: 999px; font-size: 14px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); }
@@ -229,9 +232,11 @@
           <p class="eyebrow">Review report</p>
           <h1 id="r-name"></h1>
           <p id="r-date" class="muted small"></p>
+          <p id="r-metrics" class="muted small"></p>
         </div>
         <button type="button" class="btn ghost" data-action="new">New review</button>
       </div>
+      <div id="r-warnings" class="card warn" role="alert" hidden></div>
       <div id="r-verdict" class="card verdict">
         <div class="verdict-label"><span class="dot" aria-hidden="true"></span><span id="r-verdict-text"></span></div>
         <p id="r-summary" class="summary"></p>
@@ -513,6 +518,15 @@
     const summary = r.executive_summary;
     $('r-name').textContent = r.document_name;
     $('r-date').textContent = `Reviewed ${fmtDate(r.created_at)}`;
+    const m = record.metrics;
+    $('r-metrics').textContent = m
+      ? `${m.calls} model calls · ${(m.prompt_tokens + m.output_tokens).toLocaleString()} tokens · ${m.model_seconds}s in model`
+        + (m.cost_usd ? ` · $${m.cost_usd}` : '')
+      : '';
+    const warnings = r.warnings || [];
+    $('r-warnings').replaceChildren(...warnings.map((w) => el('p', null, w)));
+    $('r-warnings').hidden = warnings.length === 0;
+
     const [verdictText, tone] = VERDICT[summary.verdict] || [label(summary.verdict), 'medium'];
     $('r-verdict').className = `card verdict tone-${tone}`;
     $('r-verdict-text').textContent = verdictText;

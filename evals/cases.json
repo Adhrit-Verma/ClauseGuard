@@ -1,0 +1,30 @@
+[
+  {
+    "name": "sample NDA",
+    "path": "sample_docs/sample_nda.txt",
+    "expected_clauses": 7,
+    "expected_findings": [
+      "perpetual_or_overbroad_confidentiality",
+      "auto_renewal_no_optout",
+      "liability_cap_too_low",
+      "unlimited_one_sided_indemnity",
+      "no_termination_for_convenience",
+      "unfavorable_payment_terms",
+      "unfavorable_governing_law"
+    ]
+  },
+  {
+    "name": "synthetic offer letter",
+    "path": "sample_docs/sample_offer_letter.txt",
+    "expected_clauses": 9,
+    "expected_findings": [
+      "unilateral_changes",
+      "open_ended_probation",
+      "one_sided_notice_period",
+      "bond_or_clawback",
+      "overbroad_non_compete",
+      "overbroad_ip_assignment",
+      "perpetual_or_overbroad_confidentiality"
+    ]
+  }
+]

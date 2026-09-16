@@ -3,7 +3,15 @@ no API key needed."""
 
 import pytest
 
+from clauseguard import llm
 from clauseguard.models.schemas import Clause, ClauseType, Rule, Severity
+
+
+@pytest.fixture(autouse=True)
+def no_embeddings(monkeypatch):
+    """Keep the suite offline and deterministic: retrieval behaves as if no embedding model is
+    installed. Tests that want the hybrid path patch `llm.embed` themselves."""
+    monkeypatch.setattr(llm, "embed", lambda texts: None)
 
 
 @pytest.fixture

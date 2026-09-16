@@ -13,8 +13,16 @@ pytest, every LLM call mocked via `monkeypatch.setattr(<agent module>,
   Long-document splitting (extractor line chunks, analyzer check batches)
   is tested by shrinking `prompt_budget` / `MAX_CHECKS_PER_CALL`.
 - `test_rules_loader.py` -- default rule set loads and validates.
-- `test_retrieval.py` -- tokenizer and BM25 scoring (no overlap scores 0,
-  rarer shared terms score higher).
+- `test_guardrails.py` -- injection phrases caught and ordinary contract
+  text left alone, PII redaction (identifiers replaced, money kept, line
+  count preserved), and that redaction is off for a local model but on for
+  a remote one.
+- `test_retrieval.py` -- tokenizer, BM25 scoring, cosine similarity, RRF
+  fusion, and `candidate_pairs` in both modes: keyword-only, and hybrid
+  finding a paraphrased clause that shares no words with the rule.
+  `conftest.py`'s autouse `no_embeddings` fixture stubs `llm.embed` to None
+  so the suite never hits a real embedding model; hybrid tests patch it
+  with their own deterministic vectors.
 - `test_llm.py` -- the markdown-fence-stripping JSON parser, and the
   context-overflow guard (refuses a too-long prompt before calling Ollama).
 - `test_db.py` -- the review status lifecycle (extracting -> ... -> done

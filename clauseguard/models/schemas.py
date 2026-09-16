@@ -63,6 +63,7 @@ class RiskFinding(BaseModel):
     rule_name: str
     severity: Severity
     explanation: str
+    retrieved_by: str = "type"  # how retrieval paired this clause with this rule: type/keyword/hybrid
 
 
 class RiskAnalysisResult(BaseModel):
@@ -134,6 +135,7 @@ class ReviewReport(BaseModel):
     clauses: list[Clause]
     findings: list[RiskFinding]
     executive_summary: ExecutiveSummary
+    warnings: list[str] = Field(default_factory=list)  # e.g. text in the document aimed at the model
 
 
 class ReviewStatus(str, Enum):
@@ -156,3 +158,4 @@ class ReviewRecord(BaseModel):
     status: ReviewStatus
     error: str | None = None
     report: ReviewReport | None = None
+    metrics: dict | None = None  # calls, tokens, model_seconds, cost_usd -- see llm.summarize_calls
